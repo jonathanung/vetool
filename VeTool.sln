@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "apps", "apps", "{5A0F0AFF-FB3E-4663-8225-A365334DB3DF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VeTool.Api", "apps\api\VeTool.Api.csproj", "{B12AB891-E47A-4650-B80F-3EDB95C8C70B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VeTool.Domain", "apps\domain\VeTool.Domain.csproj", "{50AF6D70-DAFB-42C3-AE61-D8DC2836022C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{FB7689CB-CB04-4FF8-BDE7-5E1F6359CCEE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VeTool.Tests", "tests\api\VeTool.Tests.csproj", "{B0D609C7-C8FD-4DD8-A906-E1E4852B707F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{0B8166B9-2850-41AD-86A5-8F6EEB8A0B82}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VeTool.DbCheck", "tools\dbcheck\VeTool.DbCheck.csproj", "{5783B837-9DB8-4F35-A167-DFAF5D86F91C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B12AB891-E47A-4650-B80F-3EDB95C8C70B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B12AB891-E47A-4650-B80F-3EDB95C8C70B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B12AB891-E47A-4650-B80F-3EDB95C8C70B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B12AB891-E47A-4650-B80F-3EDB95C8C70B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50AF6D70-DAFB-42C3-AE61-D8DC2836022C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50AF6D70-DAFB-42C3-AE61-D8DC2836022C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50AF6D70-DAFB-42C3-AE61-D8DC2836022C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50AF6D70-DAFB-42C3-AE61-D8DC2836022C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B0D609C7-C8FD-4DD8-A906-E1E4852B707F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0D609C7-C8FD-4DD8-A906-E1E4852B707F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0D609C7-C8FD-4DD8-A906-E1E4852B707F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0D609C7-C8FD-4DD8-A906-E1E4852B707F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5783B837-9DB8-4F35-A167-DFAF5D86F91C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5783B837-9DB8-4F35-A167-DFAF5D86F91C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5783B837-9DB8-4F35-A167-DFAF5D86F91C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5783B837-9DB8-4F35-A167-DFAF5D86F91C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B12AB891-E47A-4650-B80F-3EDB95C8C70B} = {5A0F0AFF-FB3E-4663-8225-A365334DB3DF}
+		{50AF6D70-DAFB-42C3-AE61-D8DC2836022C} = {5A0F0AFF-FB3E-4663-8225-A365334DB3DF}
+		{B0D609C7-C8FD-4DD8-A906-E1E4852B707F} = {FB7689CB-CB04-4FF8-BDE7-5E1F6359CCEE}
+		{5783B837-9DB8-4F35-A167-DFAF5D86F91C} = {0B8166B9-2850-41AD-86A5-8F6EEB8A0B82}
+	EndGlobalSection
+EndGlobal

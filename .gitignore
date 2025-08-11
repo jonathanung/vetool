@@ -1,0 +1,34 @@
+# Node and Next.js (future web app)
+node_modules/
+.next/
+
+# .NET build artifacts
+bin/
+obj/
+
+# Rider/VSCode/etc
+.idea/
+.vscode/
+*.user
+*.suo
+
+# OS junk
+.DS_Store
+
+# Env and secrets
+.env
+**/.env
+**/.env.*
+appsettings.*.secrets.json
+secrets.json
+
+# Data protection keys
+**/DataProtection-Keys/
+
+# Logs
+logs/
+*.log
+
+# Coverage
+coverage/
+
