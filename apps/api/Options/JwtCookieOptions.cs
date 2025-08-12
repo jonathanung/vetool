@@ -2,5 +2,6 @@ namespace VeTool.Api.Options;
 
 public sealed class JwtCookieOptions
 {
-    public string CookieName { get; init; } = Environment.GetEnvironmentVariable("JWT_COOKIE_NAME") ?? "cookie_jwt";
+    public string CookieName { get; set; } = "vetool_jwt";
+    public string? Domain { get; set; }
 } 

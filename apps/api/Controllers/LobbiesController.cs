@@ -56,6 +56,23 @@ public class LobbiesController : ControllerBase
         return Ok(list);
     }
 
+    [HttpGet("{id:guid}/members")]
+    public async Task<IActionResult> Members(Guid id)
+    {
+        var members = await _db.LobbyMemberships.AsNoTracking()
+            .Where(m => m.LobbyId == id)
+            .Join(_db.Users, m => m.UserId, u => u.Id, (m, u) => new
+            {
+                m.UserId,
+                u.UserName,
+                u.DisplayName,
+                m.Role,
+                m.Team
+            })
+            .ToListAsync();
+        return Ok(members);
+    }
+
     [Authorize]
     [HttpPost("{id:guid}/join")]
     public async Task<IActionResult> Join(Guid id)

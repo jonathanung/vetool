@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using VeTool.Api.Services.External;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
+using VeTool.Domain.Enums;
 
 namespace VeTool.Api.Controllers;
 
@@ -14,11 +16,13 @@ public class UsersController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly AppDbContext _db;
+    private readonly IRiotStatsProvider _stats;
 
-    public UsersController(UserManager<ApplicationUser> userManager, AppDbContext db)
+    public UsersController(UserManager<ApplicationUser> userManager, AppDbContext db, IRiotStatsProvider stats)
     {
         _userManager = userManager;
         _db = db;
+        _stats = stats;
     }
 
     [HttpGet("{id:guid}")]
@@ -46,6 +50,16 @@ public class UsersController : ControllerBase
         user.UpdatedAt = DateTime.UtcNow;
         var res = await _userManager.UpdateAsync(user);
         return res.Succeeded ? Ok(new { userId = user.Id, user.UserName, user.DisplayName }) : BadRequest(res.Errors);
+    }
+
+    [HttpGet("{id:guid}/stats")]
+    public async Task<IActionResult> GetStats(Guid id, [FromQuery] Game game)
+    {
+        var user = await _db.Users.FindAsync(id);
+        if (user is null) return NotFound();
+        if (string.IsNullOrWhiteSpace(user.RiotName) || string.IsNullOrWhiteSpace(user.RiotTag)) return BadRequest("User has no linked Riot account");
+        var stats = await _stats.GetOrFetchAsync(id, user.RiotName!, user.RiotTag!, game);
+        return Ok(new { userId = id, game, stats.Payload, stats.LastSyncedAt });
     }
 }
 

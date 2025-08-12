@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0b1020;
+  --card: #0f172a;
+  --card-glass: rgba(15, 23, 42, 0.5);
+  --muted: #1f2937;
+  --text: #e5e7eb;
+  --text-muted: #9ca3af;
+  --primary: #8b5cf6; /* purple */
+  --primary-contrast: #0b1020;
+  --accent: #06b6d4; /* teal */
+  --accent-2: #22d3ee;
+  --ring: rgba(139, 92, 246, 0.45);
+}
+
+.dark {
+  --bg: #0b1020;
+  --card: #0f172a;
+  --card-glass: rgba(15, 23, 42, 0.5);
+  --muted: #1f2937;
+  --text: #e5e7eb;
+  --text-muted: #9ca3af;
+  --primary: #8b5cf6;
+  --primary-contrast: #0b1020;
+  --accent: #06b6d4;
+  --accent-2: #22d3ee;
+  --ring: rgba(139, 92, 246, 0.45);
+}
+
+/* Soft Material preset can be toggled by adding data-theme="soft" at html */
+[data-theme="soft"] {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --card-glass: rgba(255, 255, 255, 0.6);
+  --muted: #e5e7eb;
+  --text: #0f172a;
+  --text-muted: #475569;
+  --primary: #10b981; /* green */
+  --primary-contrast: #ffffff;
+  --accent: #34d399;
+  --accent-2: #a7f3d0;
+  --ring: rgba(16, 185, 129, 0.35);
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.card {
+  background: var(--card);
+}
+.card-glass {
+  background: var(--card-glass);
+  backdrop-filter: saturate(180%) blur(10px);
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm transition-colors ease-smooth;
+  background: var(--primary);
+  color: var(--primary-contrast);
+}
+.btn:hover { box-shadow: 0 0 0 2px var(--ring); }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

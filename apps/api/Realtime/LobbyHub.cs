@@ -6,6 +6,7 @@ using VeTool.Api.Contracts;
 using VeTool.Api.Services.Realtime;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
+using VeTool.Domain.Enums;
 
 namespace VeTool.Api.Realtime;
 
@@ -46,9 +47,12 @@ public class LobbyHub : Hub
         if (!await _idem.TryBeginAsync($"lobby:{lobbyId}:captains", clientRequestId, TimeSpan.FromMinutes(2))) return;
         var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == lobbyId);
         if (lobby is null) { await EmitError(lobbyId, "not_found", "Lobby not found"); return; }
-        var a = await _db.LobbyMemberships.AnyAsync(m => m.LobbyId == lobbyId && m.UserId == teamAUserId);
-        var b = await _db.LobbyMemberships.AnyAsync(m => m.LobbyId == lobbyId && m.UserId == teamBUserId);
-        if (!a || !b) { await EmitError(lobbyId, "invalid_captain", "Captain must be in lobby"); return; }
+        var a = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == teamAUserId);
+        var b = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == teamBUserId);
+        if (a is null || b is null) { await EmitError(lobbyId, "invalid_captain", "Captain must be in lobby"); return; }
+        a.Role = LobbyRole.Captain; a.Team = TeamSide.A;
+        b.Role = LobbyRole.Captain; b.Team = TeamSide.B;
+        await _db.SaveChangesAsync();
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
         var payload = new CaptainsSetEvent(lobbyId, teamAUserId, teamBUserId);
         await Clients.Group(GroupFor(lobbyId)).SendAsync("CaptainsSet", new RealtimeEnvelope("CaptainsSet", seq, DateTime.UtcNow, payload));
@@ -57,8 +61,16 @@ public class LobbyHub : Hub
     public async Task UpdateTeams(Guid lobbyId, List<Guid> teamA, List<Guid> teamB, string clientRequestId)
     {
         if (!await _idem.TryBeginAsync($"lobby:{lobbyId}:teams", clientRequestId, TimeSpan.FromMinutes(2))) return;
-        var memberIds = await _db.LobbyMemberships.Where(m => m.LobbyId == lobbyId).Select(m => m.UserId).ToListAsync();
-        if (teamA.Except(memberIds).Any() || teamB.Except(memberIds).Any()) { await EmitError(lobbyId, "invalid_team", "User not in lobby"); return; }
+        var members = await _db.LobbyMemberships.Where(m => m.LobbyId == lobbyId).ToListAsync();
+        var setA = new HashSet<Guid>(teamA);
+        var setB = new HashSet<Guid>(teamB);
+        foreach (var m in members)
+        {
+            if (setA.Contains(m.UserId)) m.Team = TeamSide.A;
+            else if (setB.Contains(m.UserId)) m.Team = TeamSide.B;
+            else m.Team = TeamSide.Unassigned;
+        }
+        await _db.SaveChangesAsync();
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
         var payload = new TeamsUpdatedEvent(lobbyId, teamA, teamB);
         await Clients.Group(GroupFor(lobbyId)).SendAsync("TeamsUpdated", new RealtimeEnvelope("TeamsUpdated", seq, DateTime.UtcNow, payload));

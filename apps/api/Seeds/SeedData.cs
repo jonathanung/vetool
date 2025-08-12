@@ -2,17 +2,18 @@ using Microsoft.EntityFrameworkCore;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
 using VeTool.Domain.Enums;
+using Microsoft.AspNetCore.Identity;
 
 namespace VeTool.Api.Seeds;
 
 public static class SeedData
 {
-    public static async Task EnsureSeedAsync(AppDbContext db)
+    public static async Task EnsureSeedAsync(AppDbContext db, UserManager<ApplicationUser> userManager)
     {
         await db.Database.MigrateAsync();
 
-        // Ensure a demo user exists to satisfy FK constraints
-        var demoUser = await db.Users.FirstOrDefaultAsync();
+        // Ensure demo user exists with a valid password
+        var demoUser = await userManager.FindByNameAsync("demo");
         if (demoUser == null)
         {
             demoUser = new ApplicationUser
@@ -22,12 +23,28 @@ public static class SeedData
                 NormalizedUserName = "DEMO",
                 Email = "demo@example.com",
                 NormalizedEmail = "DEMO@EXAMPLE.COM",
-                EmailConfirmed = true,
                 DisplayName = "Demo User",
+                EmailConfirmed = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-            db.Users.Add(demoUser);
+            var createResult = await userManager.CreateAsync(demoUser, "DemoPass123!");
+            if (!createResult.Succeeded)
+            {
+                throw new Exception("Failed to seed demo user: " + string.Join(", ", createResult.Errors.Select(e => e.Description)));
+            }
+        }
+        else
+        {
+            // If user exists but no password, set one
+            if (string.IsNullOrEmpty(demoUser.PasswordHash))
+            {
+                var addPw = await userManager.AddPasswordAsync(demoUser, "DemoPass123!");
+                if (!addPw.Succeeded)
+                {
+                    throw new Exception("Failed to set demo user password: " + string.Join(", ", addPw.Errors.Select(e => e.Description)));
+                }
+            }
         }
 
         if (!await db.Maps.AnyAsync())

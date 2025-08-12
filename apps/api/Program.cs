@@ -3,12 +3,15 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using StackExchange.Redis;
+using VeTool.Api.Options;
 using VeTool.Api.Seeds;
+using VeTool.Api.Services.External;
 using VeTool.Api.Services.Realtime;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
@@ -48,7 +51,12 @@ var redisConn = Environment.GetEnvironmentVariable("REDIS_CONNECTION")
     ?? configuration.GetConnectionString("Redis")
     ?? "localhost:6379";
 
-var jwtCookieName = Environment.GetEnvironmentVariable("JWT_COOKIE_NAME") ?? "cookie_jwt";
+var jwtCookieName = Environment.GetEnvironmentVariable("JWT_COOKIE_NAME") ?? "vetool_jwt";
+var jwtCookieDomain = Environment.GetEnvironmentVariable("JWT_COOKIE_DOMAIN");
+services.Configure<JwtCookieOptions>(options => { options.CookieName = jwtCookieName; options.Domain = jwtCookieDomain; });
+
+var authRequireConfirm = (Environment.GetEnvironmentVariable("AUTH_REQUIRE_EMAIL_CONFIRMATION") ?? "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+services.Configure<AuthOptions>(o => o.RequireEmailConfirmation = authRequireConfirm);
 
 services.AddDbContext<AppDbContext>(options =>
 {
@@ -65,11 +73,18 @@ services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 
 services.AddDataProtection();
 
+// HTTP clients for external providers
+services.AddHttpClient();
+
 // JWT (RS256) in httpOnly cookie
-var rsa = RSA.Create(2048);
+var rsa = RSA.Create();
 var signingKey = new RsaSecurityKey(rsa) { KeyId = Guid.NewGuid().ToString("N") };
 services.AddSingleton(signingKey);
-services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -113,13 +128,25 @@ services.AddSingleton<ISequenceGenerator, RedisSequenceGenerator>();
 services.AddSingleton<IIdempotencyService, RedisIdempotencyService>();
 services.AddSingleton<ICaptainPicker, CaptainPicker>();
 
+// external providers
+services.AddSingleton<ICs2PoolProvider, Cs2PoolProvider>();
+services.AddSingleton<IValPoolProvider, ValPoolProvider>();
+services.AddScoped<IRiotStatsProvider, RiotStatsProvider>();
+services.AddSingleton<ISteamAvatarService, SteamAvatarService>();
+
 services.AddCors(options =>
 {
     options.AddPolicy("default", p => p
+        .WithOrigins(
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001"
+        )
         .AllowAnyHeader()
         .AllowAnyMethod()
         .AllowCredentials()
-        .SetIsOriginAllowed(_ => true));
+        .SetIsOriginAllowedToAllowWildcardSubdomains());
 });
 
 services.AddControllers().AddNewtonsoftJson();
@@ -133,6 +160,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Trust X-Forwarded-* headers when behind proxy (needed for correct HTTPS detection)
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor
+});
 
 app.UseCors("default");
 app.UseAuthentication();
@@ -148,7 +181,8 @@ app.MapHub<VeTool.Api.Realtime.VetoHub>("/hubs/veto");
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await SeedData.EnsureSeedAsync(db);
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+    await VeTool.Api.Seeds.SeedData.EnsureSeedAsync(db, userManager);
 }
 
 app.Run();
