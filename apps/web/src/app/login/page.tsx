@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('DemoPass123!')
   const [msg, setMsg] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     // best effort check
@@ -53,9 +54,19 @@ export default function LoginPage() {
         </div>
         <div className="space-y-1">
           <label className="text-sm">Password</label>
-          <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} className="w-full rounded border p-2 bg-transparent" aria-label="Password" />
+          <div className="flex items-center gap-2">
+            <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e)=>setPassword(e.target.value)} className="w-full rounded border p-2 bg-transparent" aria-label="Password" />
+            <button
+              type="button"
+              onClick={()=>setShowPassword((v)=>!v)}
+              className="rounded border px-2 py-1 text-xs"
+              aria-pressed={showPassword}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
-        <button disabled={submitting} className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900" aria-disabled={submitting}>
+        <button disabled={submitting} className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900 w-full" aria-disabled={submitting}>
           {submitting ? 'Signing in…' : 'Login'}
         </button>
       </form>
@@ -63,4 +74,4 @@ export default function LoginPage() {
       <p className="text-sm text-gray-600 dark:text-gray-300">Don&apos;t have an account? <Link className="underline" href="/signup">Create one</Link>.</p>
     </div>
   )
-} 
+}

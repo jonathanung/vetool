@@ -1,8 +1,7 @@
 "use client"
 import { useState } from 'react'
 import Link from 'next/link'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!
+import { API_BASE } from '@/lib/config'
 
 async function api(path: string, body: any) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -11,11 +10,26 @@ async function api(path: string, body: any) {
     body: JSON.stringify(body),
     credentials: 'include',
   })
+
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    data = undefined
+  }
+
   if (!res.ok) {
-    const msg = res.status === 400 ? 'Please check your input.' : 'Something went wrong. Please try again.'
+    const identityError =
+      (Array.isArray(data) && data[0]?.description) ||
+      data?.errors?.[0]?.description ||
+      data?.message
+    const msg =
+      identityError ||
+      (res.status === 400 ? 'Please check your input.' : 'Something went wrong. Please try again.')
     throw new Error(msg)
   }
-  return res.json()
+
+  return data
 }
 
 export default function SignupPage() {
@@ -24,7 +38,9 @@ export default function SignupPage() {
   const [password, setPassword] = useState('DemoPass123!')
   const [msg, setMsg] = useState('')
   const [verifyToken, setVerifyToken] = useState('')
+  const [verifyUserId, setVerifyUserId] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function handleSignup(e: React.FormEvent) {
     e.preventDefault()
@@ -33,6 +49,7 @@ export default function SignupPage() {
     try {
       const res = await api('/auth/register', { email, username, password, displayName: username })
       setVerifyToken(res.verificationToken || '')
+      setVerifyUserId(res.userId || '')
       setMsg('Registered. Please verify your email (dev mode: use token below), then login.')
     } catch (err: any) {
       setMsg(err.message || 'Signup failed.')
@@ -42,8 +59,12 @@ export default function SignupPage() {
   }
 
   async function handleVerify() {
+    if (!verifyUserId || !verifyToken) {
+      setMsg('Need userId and token to verify (register first).')
+      return
+    }
     try {
-      await api('/auth/verify-email', { userId: '', token: verifyToken })
+      await api('/auth/verify-email', { userId: verifyUserId, token: verifyToken })
       setMsg('Verified. You can now login.')
     } catch (err: any) {
       setMsg(err.message || 'Verification failed.')
@@ -64,7 +85,17 @@ export default function SignupPage() {
         </div>
         <div className="space-y-1">
           <label className="text-sm">Password</label>
-          <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} className="w-full rounded border p-2 bg-transparent" />
+          <div className="flex items-center gap-2">
+            <input type={showPassword ? 'text' : 'password'} value={password} onChange={(e)=>setPassword(e.target.value)} className="w-full rounded border p-2 bg-transparent" />
+            <button
+              type="button"
+              onClick={()=>setShowPassword((v)=>!v)}
+              className="rounded border px-2 py-1 text-xs"
+              aria-pressed={showPassword}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
         </div>
         <button disabled={submitting} className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900" aria-disabled={submitting}>
           {submitting ? 'Creating…' : 'Sign up'}

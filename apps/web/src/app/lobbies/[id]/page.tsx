@@ -1,6 +1,5 @@
 import { getLobby, getLobbyMembers } from '@/lib/lobbies'
 import LobbyClient from './realtime'
-import CaptainPicker from '@/components/captain/CaptainPicker'
 import Link from 'next/link'
 
 export default async function LobbyDetailPage({ params }: { params: { id: string } }) {
@@ -17,18 +16,7 @@ export default async function LobbyDetailPage({ params }: { params: { id: string
         <h1 className="text-xl font-semibold">{lobby.name}</h1>
         <Link className="text-sm underline" href="/lobbies">Back</Link>
       </div>
-      <section className="grid md:grid-cols-2 gap-6">
-        <div className="rounded-2xl p-4 card-glass">
-          <h2 className="font-medium mb-2">Captain selection</h2>
-          <CaptainPicker
-            players={players}
-          />
-        </div>
-        <div className="rounded-2xl p-4 card-glass">
-          <h2 className="font-medium mb-2">Realtime</h2>
-          <LobbyClient lobbyId={params.id} />
-        </div>
-      </section>
+      <LobbyClient lobbyId={params.id} initialMembers={players} />
     </div>
   )
-} 
+}

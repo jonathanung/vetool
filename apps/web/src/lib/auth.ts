@@ -1,8 +1,7 @@
 import { cookies } from 'next/headers'
+import { API_BASE } from './config'
 
 export type Me = { id: string; userName: string; displayName: string; email: string; avatarUrl?: string }
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000/api/v1'
 
 export async function getMe(): Promise<Me | null> {
   try {

@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { API_BASE } from '@/lib/config'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000/api/v1'
-
-export async function GET(_req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const cookie = req.headers.get('cookie') || ''
   const upstream = await fetch(`${API_BASE}/auth/me`, {
     method: 'GET',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      ...(cookie ? { cookie } : {}),
+    },
     credentials: 'include',
+    cache: 'no-store',
   })
   const raw = await upstream.text()
   let data: any = null
   try { data = JSON.parse(raw) } catch { data = raw }
   return NextResponse.json(data, { status: upstream.status })
-} 
+}

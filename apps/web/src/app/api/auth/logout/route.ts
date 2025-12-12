@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://localhost:5000/api/v1'
+import { API_BASE, JWT_COOKIE_NAME } from '@/lib/config'
 
 export async function POST(req: NextRequest) {
   const upstream = await fetch(`${API_BASE}/auth/logout`, {
@@ -22,7 +21,7 @@ export async function POST(req: NextRequest) {
       })
     }
     // Also delete via Next cookies API for safety (name must match backend)
-    res.cookies.delete(process.env.NEXT_PUBLIC_JWT_COOKIE_NAME || 'vetool_jwt')
+    res.cookies.delete(JWT_COOKIE_NAME)
   }
 
   return res

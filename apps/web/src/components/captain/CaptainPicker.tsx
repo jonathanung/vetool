@@ -38,9 +38,12 @@ export default function CaptainPicker({ players }: Props) {
     setTeamTurn(teamTurn === 'A' ? 'B' : 'A')
   }
 
-  const picked = new Set([...teamA, ...teamB])
-  if (captainA) picked.add(captainA)
-  if (captainB) picked.add(captainB)
+  const picked = useMemo(() => {
+    const s = new Set([...teamA, ...teamB])
+    if (captainA) s.add(captainA)
+    if (captainB) s.add(captainB)
+    return s
+  }, [teamA, teamB, captainA, captainB])
   const unpicked = players.filter(p => !picked.has(p.id))
 
   return (
