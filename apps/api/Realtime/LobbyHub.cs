@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -13,6 +14,7 @@ namespace VeTool.Api.Realtime;
 [Authorize]
 public class LobbyHub : Hub
 {
+    private static readonly ConcurrentDictionary<string, HashSet<Guid>> ConnectionLobbies = new();
     private readonly AppDbContext _db;
     private readonly ISequenceGenerator _seq;
     private readonly IIdempotencyService _idem;
@@ -29,6 +31,8 @@ public class LobbyHub : Hub
     public async Task JoinLobby(Guid lobbyId)
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupFor(lobbyId));
+        var set = ConnectionLobbies.GetOrAdd(Context.ConnectionId, _ => new HashSet<Guid>());
+        lock (set) { set.Add(lobbyId); }
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
         var payload = new UserJoinedEvent(lobbyId, Guid.Parse(Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value ?? Guid.Empty.ToString()));
         await Clients.Group(GroupFor(lobbyId)).SendAsync("UserJoined", new RealtimeEnvelope("UserJoined", seq, DateTime.UtcNow, payload));
@@ -37,6 +41,10 @@ public class LobbyHub : Hub
     public async Task LeaveLobby(Guid lobbyId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupFor(lobbyId));
+        if (ConnectionLobbies.TryGetValue(Context.ConnectionId, out var set))
+        {
+            lock (set) { set.Remove(lobbyId); }
+        }
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
         var payload = new UserLeftEvent(lobbyId, Guid.Parse(Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value ?? Guid.Empty.ToString()));
         await Clients.Group(GroupFor(lobbyId)).SendAsync("UserLeft", new RealtimeEnvelope("UserLeft", seq, DateTime.UtcNow, payload));
@@ -80,4 +88,42 @@ public class LobbyHub : Hub
 
     private Task EmitError(Guid lobbyId, string code, string message) =>
         Clients.Group(GroupFor(lobbyId)).SendAsync("Error", new RealtimeEnvelope("Error", 0, DateTime.UtcNow, new ErrorEvent(code, message, null)));
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        var userIdStr = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
+        if (userIdStr is null || !Guid.TryParse(userIdStr, out var userId))
+        {
+            await base.OnDisconnectedAsync(exception);
+            return;
+        }
+
+        if (!ConnectionLobbies.TryRemove(Context.ConnectionId, out var lobbies) || lobbies.Count == 0)
+        {
+            await base.OnDisconnectedAsync(exception);
+            return;
+        }
+
+        var toSave = false;
+        foreach (var lobbyId in lobbies)
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupFor(lobbyId));
+            var membership = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == userId);
+            if (membership is not null)
+            {
+                _db.LobbyMemberships.Remove(membership);
+                toSave = true;
+            }
+            var seq = await _seq.NextLobbySequenceAsync(lobbyId);
+            var payload = new UserLeftEvent(lobbyId, userId);
+            await Clients.Group(GroupFor(lobbyId)).SendAsync("UserLeft", new RealtimeEnvelope("UserLeft", seq, DateTime.UtcNow, payload));
+        }
+
+        if (toSave)
+        {
+            await _db.SaveChangesAsync();
+        }
+
+        await base.OnDisconnectedAsync(exception);
+    }
 } 

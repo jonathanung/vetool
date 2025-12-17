@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -27,6 +28,82 @@ public class AuthController : ControllerBase
         _signingKey = signingKey;
         _cookieOptions = cookieOptions.Value;
         _authOptions = authOptions.Value;
+    }
+
+    private static readonly string[] GuestWords = new[]
+    {
+        "alpha","bravo","charlie","delta","echo","foxtrot","golf","hotel","india","juliet","kilo","lima","mike","november","oscar","papa","quebec","romeo","sierra","tango","uniform","victor","whiskey","xray","yankee","zulu",
+        "red","blue","green","yellow","orange","purple","silver","gold","scarlet","crimson","azure","indigo","violet","cyan",
+        "wolf","lion","tiger","eagle","hawk","falcon","otter","badger","bear","shark","whale","dolphin","panda","koala",
+        "river","mountain","valley","forest","meadow","ocean","desert","canyon","island","harbor","summit","ridge","coast",
+        "swift","silent","brisk","bright","calm","clever","bold","lucky","gentle","mighty","rapid","steady","wild","brave"
+    };
+
+    private static string RandomGuestSlug()
+    {
+        Span<byte> bytes = stackalloc byte[8];
+        RandomNumberGenerator.Fill(bytes);
+        var words = new string[4];
+        for (int i = 0; i < 4; i++)
+        {
+            var idx = BitConverter.ToUInt16(bytes.Slice(i * 2, 2)) % (uint)GuestWords.Length;
+            words[i] = GuestWords[idx];
+        }
+        return string.Join("_", words);
+    }
+
+    private async Task<(ApplicationUser user, string password)> CreateGuestUserAsync()
+    {
+        for (int attempt = 0; attempt < 5; attempt++)
+        {
+            var slug = RandomGuestSlug();
+            var existing = await _userManager.FindByNameAsync(slug);
+            if (existing != null) continue;
+            var user = new ApplicationUser
+            {
+                Id = Guid.NewGuid(),
+                UserName = slug,
+                DisplayName = slug,
+                Email = $"{slug}@guest.local",
+                EmailConfirmed = true
+            };
+            var password = $"Guest!{Guid.NewGuid():N}";
+            var result = await _userManager.CreateAsync(user, password);
+            if (result.Succeeded)
+            {
+                return (user, password);
+            }
+        }
+        throw new Exception("Failed to create guest user after retries");
+    }
+
+    [AllowAnonymous]
+    [HttpPost("guest")]
+    public async Task<IActionResult> Guest()
+    {
+        var (user, _) = await CreateGuestUserAsync();
+        var token = CreateJwt(user);
+        var forwardedProto = Request.Headers["X-Forwarded-Proto"].ToString();
+        var isHttps = Request.IsHttps || string.Equals(forwardedProto, "https", StringComparison.OrdinalIgnoreCase);
+        string? cookieDomain = string.IsNullOrWhiteSpace(_cookieOptions.Domain) ? null : _cookieOptions.Domain?.Trim();
+        if (!string.IsNullOrEmpty(cookieDomain))
+        {
+            if (cookieDomain.Contains('/') || cookieDomain.Contains(':') || cookieDomain.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            {
+                cookieDomain = null;
+            }
+        }
+        Response.Cookies.Append(_cookieOptions.CookieName, token, new CookieOptions
+        {
+            HttpOnly = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = isHttps,
+            Domain = cookieDomain,
+            Path = "/",
+            Expires = DateTimeOffset.UtcNow.AddDays(2),
+            IsEssential = true
+        });
+        return Ok(new { userId = user.Id, username = user.UserName, displayName = user.DisplayName, guest = true });
     }
 
     [HttpPost("register")]
