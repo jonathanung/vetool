@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { apiGet } from '@/lib/api'
+import { serverApiGet } from '@/lib/api'
 import CreateLobbyForm from './CreateLobbyForm'
 import RefreshButton from './RefreshButton'
 
@@ -25,7 +25,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 
 export default async function LobbiesPage({ searchParams }: { searchParams: { game?: string } }) {
   const game = (searchParams.game || 'cs2').toLowerCase()
-  const data = await apiGet<any[]>(`/lobbies?game=${game}`)
+  const data = await serverApiGet<any[]>(`/lobbies?game=${game}`)
   const myLobby = data.find((l) => l.isMine || l.IsMine)
 
   return (

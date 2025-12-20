@@ -103,15 +103,41 @@ public class LobbiesController : ControllerBase
             q = q.Where(l => l.CreatedByUserId == uid.Value);
         }
 
-        var list = await q.OrderByDescending(l => l.UpdatedAt).Take(50).ToListAsync();
+        // Fetch lobbies - we need to handle visibility filtering carefully
+        // to ensure user's own lobbies always appear regardless of ordering
+        List<Lobby> list;
 
-        if (uid is null)
+        if (uid.HasValue && !mineRequested)
         {
-            list = list.Where(IsPublic).ToList();
+            // Fetch user's own lobbies first (they should always appear)
+            var myLobbies = await q
+                .Where(l => l.CreatedByUserId == uid.Value)
+                .OrderByDescending(l => l.UpdatedAt)
+                .ToListAsync();
+
+            // Fetch other public lobbies
+            var otherLobbies = await q
+                .Where(l => l.CreatedByUserId != uid.Value)
+                .OrderByDescending(l => l.UpdatedAt)
+                .Take(50)
+                .ToListAsync();
+
+            // Filter other lobbies to only public ones
+            otherLobbies = otherLobbies.Where(IsPublic).ToList();
+
+            // Merge: user's lobbies first, then others
+            list = myLobbies.Concat(otherLobbies).ToList();
+        }
+        else if (uid is null)
+        {
+            // Anonymous user - only show public lobbies
+            var allLobbies = await q.OrderByDescending(l => l.UpdatedAt).Take(100).ToListAsync();
+            list = allLobbies.Where(IsPublic).Take(50).ToList();
         }
         else
         {
-            list = list.Where(l => IsPublic(l) || l.CreatedByUserId == uid.Value).ToList();
+            // mine=true requested, already filtered by user
+            list = await q.OrderByDescending(l => l.UpdatedAt).Take(50).ToListAsync();
         }
 
         var shaped = list.Select(l => new
