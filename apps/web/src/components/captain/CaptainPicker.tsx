@@ -11,15 +11,12 @@ export default function CaptainPicker({ players }: Props) {
   const dispatch = useAppDispatch()
   const { teamA, teamB, captainA: storedCaptainA, captainB: storedCaptainB } = useAppSelector((state) => state.lobby)
 
-  // Local UI state for captain selection flow
   const [localCaptainA, setLocalCaptainA] = useState<string | undefined>(storedCaptainA ?? undefined)
   const [localCaptainB, setLocalCaptainB] = useState<string | undefined>(storedCaptainB ?? undefined)
 
-  // Use stored captains if available, otherwise use local state
   const captainA = storedCaptainA || localCaptainA
   const captainB = storedCaptainB || localCaptainB
 
-  // Pick pattern: 1-2-2-2-1
   const pattern = useMemo(() => [1, 2, 2, 2, 1], [])
   const [step, setStep] = useState(0)
   const [teamTurn, setTeamTurn] = useState<'A' | 'B'>('A')
@@ -30,7 +27,6 @@ export default function CaptainPicker({ players }: Props) {
       setLocalCaptainA(id)
     } else {
       setLocalCaptainB(id)
-      // When both captains are selected, dispatch to server
       if (localCaptainA && id) {
         dispatch(setCaptains({ captainA: localCaptainA, captainB: id }))
         setTeamTurn('A')
@@ -52,7 +48,6 @@ export default function CaptainPicker({ players }: Props) {
       nextB.push(playerId)
     }
 
-    // Dispatch team update to server via SignalR
     dispatch(updateTeams({ teamA: nextA, teamB: nextB }))
 
     const nextRemaining = remainingPicks - 1
@@ -61,7 +56,6 @@ export default function CaptainPicker({ players }: Props) {
       return
     }
 
-    // Advance to next step
     const nextStep = step + 1
     setStep(nextStep)
     const nextCount = pattern[nextStep % pattern.length]
@@ -69,7 +63,6 @@ export default function CaptainPicker({ players }: Props) {
     setTeamTurn(teamTurn === 'A' ? 'B' : 'A')
   }
 
-  // Calculate picked players (including captains)
   const picked = useMemo(() => {
     const s = new Set([...teamA, ...teamB])
     if (captainA) s.add(captainA)
@@ -80,76 +73,139 @@ export default function CaptainPicker({ players }: Props) {
   const unpicked = players.filter((p) => !picked.has(p.id))
 
   return (
-    <div className="grid md:grid-cols-3 gap-4" role="group" aria-label="Captain picker">
-      <div>
-        <h3 className="font-medium">
-          Team A {captainA && `(Captain: ${players.find((p) => p.id === captainA)?.name})`}
-        </h3>
-        {!captainA && (
-          <ul className="space-y-1" aria-label="Choose captain A">
-            {players.map((p) => (
-              <li key={p.id}>
-                <button
-                  className="w-full rounded border p-2 disabled:opacity-50"
-                  onClick={() => handleSelectCaptain('A', p.id)}
-                  aria-label={`Select ${p.name} as Captain A`}
-                  disabled={!!captainA || !!captainB}
-                >
-                  {p.name}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div>
-        <h3 className="font-medium">
-          Team B {captainB && `(Captain: ${players.find((p) => p.id === captainB)?.name})`}
-        </h3>
-        {!captainB && (
-          <ul className="space-y-1" aria-label="Choose captain B">
-            {players
-              .filter((p) => p.id !== captainA)
-              .map((p) => (
-                <li key={p.id}>
-                  <button
-                    className="w-full rounded border p-2 disabled:opacity-50"
-                    onClick={() => handleSelectCaptain('B', p.id)}
-                    aria-label={`Select ${p.name} as Captain B`}
-                    disabled={!captainA || !!captainB}
-                  >
-                    {p.name}
-                  </button>
-                </li>
-              ))}
-          </ul>
-        )}
-      </div>
-      <div>
-        <h3 className="font-medium">Pick order</h3>
-        <div className="text-sm text-gray-600 dark:text-gray-300">Pattern: 1 / 2 / 2 / 2 / 1</div>
-        {captainA && captainB && (
-          <div className="mt-2 space-y-2" aria-live="polite">
-            <div className="rounded border p-2" role="status">
-              Turn: Team {teamTurn}
+    <div className="space-y-6" role="group" aria-label="Captain picker">
+      {/* Captain Selection Phase */}
+      {(!captainA || !captainB) && (
+        <div className="grid md:grid-cols-2 gap-4">
+          {/* Team A Captain */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${captainA ? 'bg-success' : 'bg-warning animate-pulse'}`} />
+              <h3 className="font-medium text-sm">
+                {captainA ? (
+                  <span className="text-success">
+                    Captain A: {players.find((p) => p.id === captainA)?.name}
+                  </span>
+                ) : (
+                  'Select Captain A'
+                )}
+              </h3>
             </div>
-            <div className="text-xs text-gray-500">Take {remainingPicks} pick(s)</div>
-            <ul className="space-y-1" aria-label="Available players">
-              {unpicked.map((p) => (
-                <li key={p.id}>
-                  <button
-                    className="w-full rounded border p-2 disabled:opacity-50"
-                    onClick={() => handlePick(p.id)}
-                    aria-label={`Pick ${p.name} for Team ${teamTurn}`}
-                  >
-                    {p.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            {!captainA && (
+              <ul className="space-y-1.5" aria-label="Choose captain A">
+                {players.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      className="w-full text-left px-4 py-2.5 rounded-bento-sm bg-bg-secondary hover:bg-primary-soft hover:text-primary transition-all text-sm disabled:opacity-50"
+                      onClick={() => handleSelectCaptain('A', p.id)}
+                      aria-label={`Select ${p.name} as Captain A`}
+                      disabled={!!captainA || !!captainB}
+                    >
+                      {p.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        )}
-      </div>
+
+          {/* Team B Captain */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${captainB ? 'bg-success' : captainA ? 'bg-warning animate-pulse' : 'bg-border'}`} />
+              <h3 className="font-medium text-sm">
+                {captainB ? (
+                  <span className="text-success">
+                    Captain B: {players.find((p) => p.id === captainB)?.name}
+                  </span>
+                ) : (
+                  'Select Captain B'
+                )}
+              </h3>
+            </div>
+            {captainA && !captainB && (
+              <ul className="space-y-1.5" aria-label="Choose captain B">
+                {players
+                  .filter((p) => p.id !== captainA)
+                  .map((p) => (
+                    <li key={p.id}>
+                      <button
+                        className="w-full text-left px-4 py-2.5 rounded-bento-sm bg-bg-secondary hover:bg-accent-soft hover:text-accent transition-all text-sm disabled:opacity-50"
+                        onClick={() => handleSelectCaptain('B', p.id)}
+                        aria-label={`Select ${p.name} as Captain B`}
+                        disabled={!captainA || !!captainB}
+                      >
+                        {p.name}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Draft Phase */}
+      {captainA && captainB && (
+        <div className="space-y-4">
+          {/* Turn Indicator */}
+          <div className="flex items-center justify-between p-4 rounded-bento-sm bg-bg-secondary">
+            <div className="space-y-1">
+              <div className="text-xs text-text-muted uppercase tracking-wide">Current Turn</div>
+              <div className={`font-semibold ${teamTurn === 'A' ? 'text-primary' : 'text-accent'}`}>
+                Team {teamTurn}
+              </div>
+            </div>
+            <div className="text-right space-y-1">
+              <div className="text-xs text-text-muted uppercase tracking-wide">Picks Remaining</div>
+              <div className="font-semibold">{remainingPicks}</div>
+            </div>
+          </div>
+
+          {/* Draft Pattern */}
+          <div className="flex items-center gap-1 text-xs text-text-muted">
+            <span>Pattern:</span>
+            {pattern.map((p, i) => (
+              <span
+                key={i}
+                className={`px-2 py-0.5 rounded ${
+                  i === step ? 'bg-primary text-primary-contrast' : 'bg-bg-secondary'
+                }`}
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+
+          {/* Available Players */}
+          {unpicked.length > 0 ? (
+            <div className="space-y-2">
+              <h4 className="text-sm font-medium text-text-secondary">Available Players</h4>
+              <ul className="grid grid-cols-2 gap-2" aria-label="Available players" aria-live="polite">
+                {unpicked.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      className={`w-full text-left px-4 py-3 rounded-bento-sm border transition-all text-sm ${
+                        teamTurn === 'A'
+                          ? 'border-primary/20 hover:bg-primary-soft hover:text-primary hover:border-primary'
+                          : 'border-accent/20 hover:bg-accent-soft hover:text-accent hover:border-accent'
+                      }`}
+                      onClick={() => handlePick(p.id)}
+                      aria-label={`Pick ${p.name} for Team ${teamTurn}`}
+                    >
+                      {p.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="p-4 rounded-bento-sm bg-success-soft text-center">
+              <span className="text-success font-medium">All players have been drafted!</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

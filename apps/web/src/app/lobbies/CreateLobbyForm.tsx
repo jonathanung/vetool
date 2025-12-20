@@ -12,7 +12,6 @@ import { useAppDispatch } from '@/store/hooks'
 import { addToast } from '@/store/slices/uiSlice'
 
 const GAME_LABELS: Record<string, string> = {
-  // Handle various formats from backend (enum int, enum string, lowercase)
   '0': 'Counter-Strike 2',
   '1': 'Valorant',
   'Cs2': 'Counter-Strike 2',
@@ -25,13 +24,11 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
   const router = useRouter()
   const dispatch = useAppDispatch()
 
-  // Form state
   const [name, setName] = useState('My Lobby')
   const [game, setGame] = useState(defaultGame)
   const [isPublic, setIsPublic] = useState(true)
   const [showModal, setShowModal] = useState(false)
 
-  // RTK Query - fixes race condition by using built-in loading states
   const { data: existingLobby, isLoading: checking } = useGetMyLobbyQuery()
   const [createLobby, { isLoading: creating }] = useCreateLobbyMutation()
   const [deleteLobby, { isLoading: deleting }] = useDeleteLobbyMutation()
@@ -40,13 +37,10 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-
-    // If user has existing lobby, show confirmation modal
     if (existingLobby) {
       setShowModal(true)
       return
     }
-
     await doCreate()
   }
 
@@ -54,7 +48,7 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
     try {
       const result = await createLobby({
         name,
-        game: GAME_ENUM[game] ?? 0,  // Convert string to enum value
+        game: GAME_ENUM[game] ?? 0,
         maxPlayers: 10,
         isPublic,
       }).unwrap()
@@ -64,7 +58,6 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
       router.refresh()
     } catch (err: any) {
       if (err?.status === 409) {
-        // User already has a lobby - show modal
         setShowModal(true)
       } else {
         dispatch(addToast({ type: 'error', message: 'Failed to create lobby' }))
@@ -72,7 +65,6 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
     }
   }
 
-  // If user has an existing lobby, show a card to join it
   if (existingLobby) {
     const gameKey = typeof existingLobby.game === 'string'
       ? existingLobby.game.toLowerCase()
@@ -81,56 +73,50 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
 
     return (
       <div className="space-y-4">
-        {/* Existing lobby card */}
-        <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 space-y-3">
+        <div className="bento-card p-6 border-primary/20 bg-primary-soft/30 space-y-4">
           <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <div className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-                Your Active Lobby
-              </div>
-              <div className="text-lg font-semibold">{existingLobby.name}</div>
-              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-                <span className="inline-flex items-center gap-1 rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium">
-                  {gameLabel}
-                </span>
-                <span className={existingLobby.isPublic ? 'text-green-600' : 'text-gray-500'}>
+            <div className="space-y-2">
+              <div className="bento-badge bento-badge-primary">Your Active Lobby</div>
+              <div className="text-xl font-semibold">{existingLobby.name}</div>
+              <div className="flex items-center gap-2">
+                <span className="bento-badge bento-badge-muted">{gameLabel}</span>
+                <span className={`bento-badge ${existingLobby.isPublic ? 'bento-badge-success' : 'bento-badge-muted'}`}>
                   {existingLobby.isPublic ? 'Public' : 'Private'}
                 </span>
               </div>
             </div>
             <Link
               href={`/lobbies/${existingLobby.id}`}
-              className="rounded bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors"
+              className="bento-btn bento-btn-primary"
             >
-              Join Lobby
+              Enter Lobby
             </Link>
           </div>
-          <div className="flex items-center gap-2 pt-2 border-t border-blue-500/20">
-            <span className="text-xs text-gray-500">Want to create a new lobby?</span>
+          <div className="pt-4 border-t border-border flex items-center gap-3">
+            <span className="text-sm text-text-muted">Want to create a new lobby?</span>
             <button
               type="button"
               onClick={() => setShowModal(true)}
               disabled={submitting}
-              className="text-xs text-red-600 hover:text-red-700 underline disabled:opacity-50"
+              className="text-sm text-danger hover:underline disabled:opacity-50"
             >
               Delete and create new
             </button>
           </div>
         </div>
 
-        {/* Confirmation modal */}
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-900 p-4 space-y-3 shadow-lg">
-              <div className="text-base font-semibold">Delete your current lobby?</div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm">
+            <div className="bento-card p-6 max-w-md w-full mx-4 space-y-4 animate-scale-in">
+              <h3 className="text-lg font-semibold">Delete your current lobby?</h3>
+              <p className="text-text-muted">
                 This will permanently delete &quot;{existingLobby.name}&quot; and all its data.
-              </div>
-              <div className="flex gap-2 justify-end">
+              </p>
+              <div className="flex gap-3 justify-end pt-2">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="rounded border px-3 py-2 text-sm"
+                  className="bento-btn bento-btn-secondary"
                   disabled={submitting}
                 >
                   Cancel
@@ -147,7 +133,7 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
                     }
                   }}
                   disabled={submitting}
-                  className="rounded bg-red-600 text-white px-3 py-2 text-sm disabled:opacity-50"
+                  className="bento-btn bg-danger text-white hover:bg-danger/90"
                 >
                   {deleting ? 'Deleting...' : 'Yes, delete'}
                 </button>
@@ -160,59 +146,64 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
   }
 
   return (
-    <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
-      <div className="flex flex-col gap-1">
-        <label className="text-sm">Lobby name</label>
-        <input
-          className="rounded border px-3 py-2 bg-transparent"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label className="text-sm">Game</label>
-        <select
-          className="rounded border px-3 py-2 bg-transparent"
-          value={game}
-          onChange={(e) => setGame(e.target.value)}
-        >
-          <option value="cs2">CS2</option>
-          <option value="val">VAL</option>
-        </select>
-      </div>
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={isPublic}
-          onChange={(e) => setIsPublic(e.target.checked)}
-        />
-        Public (show in list)
-      </label>
-      <button
-        type="submit"
-        disabled={submitting || checking}
-        className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900 disabled:opacity-50"
-      >
-        {submitting ? 'Creating...' : 'Create lobby'}
-      </button>
+    <>
+      <form onSubmit={handleCreate} className="bento-card p-6">
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex-1 min-w-[200px] space-y-1.5">
+            <label className="block text-sm font-medium text-text-secondary">Lobby name</label>
+            <input
+              className="bento-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Enter lobby name"
+              required
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-text-secondary">Game</label>
+            <select
+              className="bento-input min-w-[120px]"
+              value={game}
+              onChange={(e) => setGame(e.target.value)}
+            >
+              <option value="cs2">CS2</option>
+              <option value="val">Valorant</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer py-2">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+              className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <span className="text-text-secondary">Public</span>
+          </label>
+          <button
+            type="submit"
+            disabled={submitting || checking}
+            className="bento-btn bento-btn-primary"
+          >
+            {submitting ? 'Creating...' : 'Create Lobby'}
+          </button>
+        </div>
+      </form>
 
-      {/* Modal shown when API returns 409 (user has lobby but RTK Query didn't detect it) */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-900 p-4 space-y-3 shadow-lg">
-            <div className="text-base font-semibold">You already have a lobby</div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm">
+          <div className="bento-card p-6 max-w-md w-full mx-4 space-y-4 animate-scale-in">
+            <h3 className="text-lg font-semibold">You already have a lobby</h3>
+            <p className="text-text-muted">
               You can only have one active lobby at a time. Please delete your existing lobby first, or refresh the page to see it.
-            </div>
-            <div className="flex gap-2 justify-end">
+            </p>
+            <div className="flex gap-3 justify-end pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setShowModal(false)
                   window.location.reload()
                 }}
-                className="rounded border px-3 py-2 text-sm"
+                className="bento-btn bento-btn-secondary"
               >
                 Refresh
               </button>
@@ -220,6 +211,6 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
           </div>
         </div>
       )}
-    </form>
+    </>
   )
 }

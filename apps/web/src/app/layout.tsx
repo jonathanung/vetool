@@ -18,22 +18,40 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-50`}>
+      <body className={`${inter.className} min-h-screen bg-bg text-text`}>
         <StoreProvider>
           <ThemeProvider>
-            <header className="border-b border-gray-200 dark:border-gray-800">
-              <nav className="container mx-auto flex items-center justify-between p-4">
-                <Link href="/" className="font-semibold">VeTool</Link>
-                <div className="flex items-center gap-4 text-sm">
-                  <Link href="/lobbies">Lobbies</Link>
-                  <ThemeSwitcher />
-                  <UserMenu />
+            <div className="min-h-screen flex flex-col">
+              <header className="sticky top-0 z-50 bg-bg/80 backdrop-blur-xl border-b border-border">
+                <nav className="container mx-auto flex items-center justify-between h-16 px-4">
+                  <Link
+                    href="/"
+                    className="text-lg font-semibold tracking-tight hover:text-primary transition-colors"
+                  >
+                    VeTool
+                  </Link>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href="/lobbies"
+                      className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-bg-secondary rounded-bento-sm transition-all"
+                    >
+                      Lobbies
+                    </Link>
+                    <div className="w-px h-5 bg-border mx-1" />
+                    <ThemeSwitcher />
+                    <UserMenu />
+                  </div>
+                </nav>
+              </header>
+              <main className="flex-1 container mx-auto px-4 py-8">
+                {children}
+              </main>
+              <footer className="border-t border-border py-6">
+                <div className="container mx-auto px-4 text-center text-sm text-text-muted">
+                  VeTool - Organize your scrims
                 </div>
-              </nav>
-            </header>
-            <main className="container mx-auto p-4">
-              {children}
-            </main>
+              </footer>
+            </div>
             <Toaster />
           </ThemeProvider>
         </StoreProvider>

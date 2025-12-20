@@ -10,18 +10,14 @@ export default function LoginPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
 
-  // Check if already logged in
   const { data: me, isLoading: checkingAuth } = useGetMeQuery()
 
-  // Form state - empty defaults (removed hardcoded test credentials)
   const [emailOrUsername, setEmailOrUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  // RTK Query mutation
   const [login, { isLoading: submitting, error }] = useLoginMutation()
 
-  // Redirect if already logged in
   useEffect(() => {
     if (me) {
       router.replace('/lobbies')
@@ -36,7 +32,6 @@ export default function LoginPage() {
       dispatch(addToast({ type: 'success', message: 'Welcome back!' }))
       router.push('/lobbies')
     } catch (err: any) {
-      // Error handling - RTK Query provides the error
       const message = err?.status === 400 || err?.status === 401
         ? 'Incorrect email or password.'
         : 'Something went wrong. Please try again.'
@@ -44,75 +39,89 @@ export default function LoginPage() {
     }
   }
 
-  // Show loading while checking auth
   if (checkingAuth) {
     return (
-      <div className="max-w-md space-y-4">
-        <h1 className="text-xl font-semibold">Login</h1>
-        <div className="text-sm text-gray-500">Checking authentication...</div>
+      <div className="max-w-md mx-auto py-12 animate-fade-in">
+        <div className="bento-card p-8 text-center">
+          <div className="text-text-muted">Checking authentication...</div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="max-w-md space-y-4">
-      <h1 className="text-xl font-semibold">Login</h1>
-      <form onSubmit={handleLogin} className="space-y-3">
-        <div className="space-y-1">
-          <label className="text-sm">Email or Username</label>
-          <input
-            value={emailOrUsername}
-            onChange={(e) => setEmailOrUsername(e.target.value)}
-            className="w-full rounded border p-2 bg-transparent"
-            aria-label="Email or Username"
-            autoComplete="username"
-            required
-          />
+    <div className="max-w-md mx-auto py-12 animate-fade-in">
+      <div className="bento-card p-8 space-y-6">
+        <div className="text-center space-y-2">
+          <h1 className="text-2xl font-bold">Welcome back</h1>
+          <p className="text-text-muted">Sign in to your account</p>
         </div>
-        <div className="space-y-1">
-          <label className="text-sm">Password</label>
-          <div className="flex items-center gap-2">
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-text-secondary">
+              Email or Username
+            </label>
             <input
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded border p-2 bg-transparent"
-              aria-label="Password"
-              autoComplete="current-password"
+              value={emailOrUsername}
+              onChange={(e) => setEmailOrUsername(e.target.value)}
+              className="bento-input"
+              placeholder="Enter your email or username"
+              autoComplete="username"
               required
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="rounded border px-2 py-1 text-xs"
-              aria-pressed={showPassword}
-            >
-              {showPassword ? 'Hide' : 'Show'}
-            </button>
           </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-text-secondary">
+              Password
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bento-input pr-16"
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-muted hover:text-text transition-colors"
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-bento-sm bg-danger-soft text-danger text-sm" role="alert">
+              {(error as any)?.status === 400 || (error as any)?.status === 401
+                ? 'Incorrect email or password.'
+                : 'Something went wrong. Please try again.'}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="bento-btn bento-btn-primary w-full"
+          >
+            {submitting ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <div className="pt-4 border-t border-border text-center">
+          <p className="text-sm text-text-muted">
+            Don&apos;t have an account?{' '}
+            <Link href="/signup" className="text-primary hover:underline font-medium">
+              Create one
+            </Link>
+          </p>
         </div>
-        <button
-          disabled={submitting}
-          className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900 w-full disabled:opacity-50"
-          aria-disabled={submitting}
-        >
-          {submitting ? 'Signing in...' : 'Login'}
-        </button>
-      </form>
-      {error && (
-        <p className="text-sm text-red-600" role="alert" aria-live="polite">
-          {(error as any)?.status === 400 || (error as any)?.status === 401
-            ? 'Incorrect email or password.'
-            : 'Something went wrong. Please try again.'}
-        </p>
-      )}
-      <p className="text-sm text-gray-600 dark:text-gray-300">
-        Don&apos;t have an account?{' '}
-        <Link className="underline" href="/signup">
-          Create one
-        </Link>
-        .
-      </p>
+      </div>
     </div>
   )
 }
