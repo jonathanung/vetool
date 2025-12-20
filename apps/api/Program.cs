@@ -178,8 +178,10 @@ app.MapGet("/api/v1/health", () => Results.Ok(new { status = "ok" }));
 app.MapHub<VeTool.Api.Realtime.LobbyHub>("/hubs/lobby");
 app.MapHub<VeTool.Api.Realtime.VetoHub>("/hubs/veto");
 
-using (var scope = app.Services.CreateScope())
+// Skip database seeding in Testing environment
+if (!app.Environment.IsEnvironment("Testing"))
 {
+    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     await VeTool.Api.Seeds.SeedData.EnsureSeedAsync(db, userManager);

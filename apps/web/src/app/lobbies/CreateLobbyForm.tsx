@@ -1,167 +1,222 @@
-"use client"
-import { useEffect, useState } from 'react'
+'use client'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import {
+  useGetMyLobbyQuery,
+  useCreateLobbyMutation,
+  useDeleteLobbyMutation,
+  GAME_ENUM,
+} from '@/store/api/lobbiesApi'
+import { useAppDispatch } from '@/store/hooks'
+import { addToast } from '@/store/slices/uiSlice'
+
+const GAME_LABELS: Record<string, string> = {
+  // Handle various formats from backend (enum int, enum string, lowercase)
+  '0': 'Counter-Strike 2',
+  '1': 'Valorant',
+  'Cs2': 'Counter-Strike 2',
+  'Val': 'Valorant',
+  'cs2': 'Counter-Strike 2',
+  'val': 'Valorant',
+}
 
 export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }) {
   const router = useRouter()
+  const dispatch = useAppDispatch()
+
+  // Form state
   const [name, setName] = useState('My Lobby')
   const [game, setGame] = useState(defaultGame)
   const [isPublic, setIsPublic] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [existingLobbyId, setExistingLobbyId] = useState<string | null>(null)
-  const [checking, setChecking] = useState(true)
-  const [confirmingReplace, setConfirmingReplace] = useState(false)
   const [showModal, setShowModal] = useState(false)
 
-  async function loadMine() {
-    setChecking(true)
-    try {
-      const res = await fetch('/api/lobbies?mine=true', { credentials: 'include', cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json()
-        const mine = (data as any[]).find(l => l.isMine || l.IsMine)
-        const id = mine?.id || mine?.Id
-        setExistingLobbyId(id || null)
-      } else {
-        setExistingLobbyId(null)
-      }
-    } catch {
-      setExistingLobbyId(null)
-    } finally {
-      setChecking(false)
-    }
-  }
+  // RTK Query - fixes race condition by using built-in loading states
+  const { data: existingLobby, isLoading: checking } = useGetMyLobbyQuery()
+  const [createLobby, { isLoading: creating }] = useCreateLobbyMutation()
+  const [deleteLobby, { isLoading: deleting }] = useDeleteLobbyMutation()
 
-  useEffect(() => {
-    loadMine()
-  }, [])
-
-  async function createLobby() {
-    const res = await fetch('/api/lobbies', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ name, game, maxPlayers: 10, isPublic }),
-    })
-    if (!res.ok) {
-      if (res.status === 409) {
-        await loadMine()
-        setConfirmingReplace(true)
-        setShowModal(true)
-        setError('You already own a lobby.')
-      } else {
-        setError('Failed to create lobby.')
-      }
-      return null
-    }
-    const data = await res.json()
-    return data.id as string
-  }
-
-  async function handleReplace() {
-    if (!existingLobbyId) {
-      await loadMine()
-    }
-    if (!existingLobbyId) {
-      setError('Could not find your existing lobby to replace. Creating a new one.')
-      // best effort: proceed to create
-      const newId = await createLobby()
-      if (newId) {
-        alert('Lobby created.')
-        router.push(`/lobbies/${newId}`)
-        router.refresh()
-        setConfirmingReplace(false)
-        setShowModal(false)
-      }
-      return
-    }
-    setSubmitting(true)
-    setError('')
-    try {
-      const del = await fetch(`/api/lobbies?id=${existingLobbyId}`, { method: 'DELETE', credentials: 'include' })
-      if (!del.ok) {
-          const msg = del.status === 404 ? 'Existing lobby not found; creating a new one anyway.' : `Failed to delete existing lobby (status ${del.status}).`
-          setError(msg)
-          if (del.status !== 404) {
-            return
-          }
-      }
-      setExistingLobbyId(null)
-      const newId = await createLobby()
-      if (newId) {
-        alert('Lobby replaced.')
-        router.push(`/lobbies/${newId}`)
-        router.refresh()
-      }
-      setConfirmingReplace(false)
-      setShowModal(false)
-    } catch {
-      setError('Failed to replace lobby.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const submitting = creating || deleting
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
-    if (existingLobbyId) {
-      await loadMine()
-      setConfirmingReplace(true)
+
+    // If user has existing lobby, show confirmation modal
+    if (existingLobby) {
       setShowModal(true)
       return
     }
-    setSubmitting(true)
+
+    await doCreate()
+  }
+
+  async function doCreate() {
     try {
-      const newId = await createLobby()
-      if (newId) {
-        router.push(`/lobbies/${newId}`)
-        router.refresh()
+      const result = await createLobby({
+        name,
+        game: GAME_ENUM[game] ?? 0,  // Convert string to enum value
+        maxPlayers: 10,
+        isPublic,
+      }).unwrap()
+
+      dispatch(addToast({ type: 'success', message: 'Lobby created!' }))
+      router.push(`/lobbies/${result.id}`)
+      router.refresh()
+    } catch (err: any) {
+      if (err?.status === 409) {
+        // User already has a lobby - show modal
+        setShowModal(true)
+      } else {
+        dispatch(addToast({ type: 'error', message: 'Failed to create lobby' }))
       }
-    } finally {
-      setSubmitting(false)
     }
+  }
+
+  // If user has an existing lobby, show a card to join it
+  if (existingLobby) {
+    const gameKey = typeof existingLobby.game === 'string'
+      ? existingLobby.game.toLowerCase()
+      : String(existingLobby.game)
+    const gameLabel = GAME_LABELS[gameKey] || gameKey.toUpperCase()
+
+    return (
+      <div className="space-y-4">
+        {/* Existing lobby card */}
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4 space-y-3">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+                Your Active Lobby
+              </div>
+              <div className="text-lg font-semibold">{existingLobby.name}</div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <span className="inline-flex items-center gap-1 rounded bg-gray-200 dark:bg-gray-700 px-2 py-0.5 text-xs font-medium">
+                  {gameLabel}
+                </span>
+                <span className={existingLobby.isPublic ? 'text-green-600' : 'text-gray-500'}>
+                  {existingLobby.isPublic ? 'Public' : 'Private'}
+                </span>
+              </div>
+            </div>
+            <Link
+              href={`/lobbies/${existingLobby.id}`}
+              className="rounded bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              Join Lobby
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 pt-2 border-t border-blue-500/20">
+            <span className="text-xs text-gray-500">Want to create a new lobby?</span>
+            <button
+              type="button"
+              onClick={() => setShowModal(true)}
+              disabled={submitting}
+              className="text-xs text-red-600 hover:text-red-700 underline disabled:opacity-50"
+            >
+              Delete and create new
+            </button>
+          </div>
+        </div>
+
+        {/* Confirmation modal */}
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-900 p-4 space-y-3 shadow-lg">
+              <div className="text-base font-semibold">Delete your current lobby?</div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                This will permanently delete &quot;{existingLobby.name}&quot; and all its data.
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="rounded border px-3 py-2 text-sm"
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await deleteLobby(existingLobby.id).unwrap()
+                      dispatch(addToast({ type: 'success', message: 'Lobby deleted' }))
+                      setShowModal(false)
+                    } catch {
+                      dispatch(addToast({ type: 'error', message: 'Failed to delete lobby' }))
+                    }
+                  }}
+                  disabled={submitting}
+                  className="rounded bg-red-600 text-white px-3 py-2 text-sm disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting...' : 'Yes, delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
     <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-3 rounded-lg border p-3">
       <div className="flex flex-col gap-1">
         <label className="text-sm">Lobby name</label>
-        <input className="rounded border px-3 py-2 bg-transparent" value={name} onChange={(e)=>setName(e.target.value)} required />
+        <input
+          className="rounded border px-3 py-2 bg-transparent"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
       </div>
       <div className="flex flex-col gap-1">
         <label className="text-sm">Game</label>
-        <select className="rounded border px-3 py-2 bg-transparent" value={game} onChange={(e)=>setGame(e.target.value)}>
+        <select
+          className="rounded border px-3 py-2 bg-transparent"
+          value={game}
+          onChange={(e) => setGame(e.target.value)}
+        >
           <option value="cs2">CS2</option>
           <option value="val">VAL</option>
         </select>
       </div>
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={isPublic} onChange={(e)=>setIsPublic(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={isPublic}
+          onChange={(e) => setIsPublic(e.target.checked)}
+        />
         Public (show in list)
       </label>
-      <button type="submit" disabled={submitting || checking} className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900">
-        {submitting ? 'Creating…' : 'Create lobby'}
+      <button
+        type="submit"
+        disabled={submitting || checking}
+        className="rounded bg-gray-900 text-white px-3 py-2 text-sm dark:bg-gray-100 dark:text-gray-900 disabled:opacity-50"
+      >
+        {submitting ? 'Creating...' : 'Create lobby'}
       </button>
-      {existingLobbyId && <span className="text-xs text-gray-500">You already own a lobby; creating will replace it.</span>}
-      {error && <span className="text-sm text-red-600">{error}</span>}
 
-      {showModal && confirmingReplace && (
+      {/* Modal shown when API returns 409 (user has lobby but RTK Query didn't detect it) */}
+      {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white dark:bg-gray-900 p-4 space-y-3 shadow-lg">
-            <div className="text-base font-semibold">Replace your current lobby?</div>
-            <div className="text-sm text-gray-600 dark:text-gray-300">This will delete your existing lobby and create a new one.</div>
+            <div className="text-base font-semibold">You already have a lobby</div>
+            <div className="text-sm text-gray-600 dark:text-gray-300">
+              You can only have one active lobby at a time. Please delete your existing lobby first, or refresh the page to see it.
+            </div>
             <div className="flex gap-2 justify-end">
-              <button type="button" onClick={()=>{setConfirmingReplace(false); setShowModal(false)}} className="rounded border px-3 py-2 text-sm">Cancel</button>
-              <button type="button" onClick={handleReplace} disabled={submitting} className="rounded bg-red-600 text-white px-3 py-2 text-sm">
-                {submitting ? 'Replacing…' : 'Yes, replace'}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false)
+                  window.location.reload()
+                }}
+                className="rounded border px-3 py-2 text-sm"
+              >
+                Refresh
               </button>
             </div>
-            <div className="text-xs text-gray-500 break-all">
-              Existing lobby id: {existingLobbyId || 'unknown'}
-            </div>
-            {error && <div className="text-xs text-red-600">{error}</div>}
           </div>
         </div>
       )}

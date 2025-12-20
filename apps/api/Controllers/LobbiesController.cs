@@ -65,10 +65,25 @@ public class LobbiesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> List([FromQuery] Game? game, [FromQuery] LobbyStatus? status, [FromQuery] string? mine = null)
+    public async Task<IActionResult> List([FromQuery] string? game, [FromQuery] LobbyStatus? status, [FromQuery] string? mine = null)
     {
         var q = _db.Lobbies.AsNoTracking().AsQueryable();
-        if (game.HasValue) q = q.Where(l => l.Game == game);
+
+        // Parse game filter - accept string like "cs2", "val", "Cs2", "Val", "0", "1"
+        if (!string.IsNullOrEmpty(game))
+        {
+            Game? parsedGame = game.ToLowerInvariant() switch
+            {
+                "cs2" or "0" => Game.Cs2,
+                "val" or "1" => Game.Val,
+                _ => Enum.TryParse<Game>(game, ignoreCase: true, out var g) ? g : null
+            };
+            if (parsedGame.HasValue)
+            {
+                q = q.Where(l => l.Game == parsedGame.Value);
+            }
+        }
+
         if (status.HasValue) q = q.Where(l => l.Status == status);
 
         // allow mine=true or mine=1
