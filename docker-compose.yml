@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vetool-postgres
+    environment:
+      POSTGRES_DB: vetool
+      POSTGRES_USER: vetool
+      POSTGRES_PASSWORD: vetool_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vetool"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vetool-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vetool-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - vetool-network
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: vetool-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=vetool
+      - POSTGRES_USER=vetool
+      - POSTGRES_PASSWORD=vetool_dev_password
+      - REDIS_CONNECTION=redis:6379
+      - JWT__Secret=your-super-secret-jwt-key-change-this-in-production-minimum-32-characters
+      - JWT__Issuer=vetool-api
+      - JWT__Audience=vetool-web
+      - JWT__ExpirationMinutes=60
+      - Hangfire__DashboardEnabled=true
+    ports:
+      - "5001:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vetool-network
+    volumes:
+      - ./apps/api:/src/apps/api
+      - ./apps/domain:/src/apps/domain
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+    container_name: vetool-web
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_BASE=http://localhost:5001/api/v1
+      - API_BASE_INTERNAL=http://api:8080/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - vetool-network
+
+networks:
+  vetool-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
