@@ -39,6 +39,14 @@ public class MatchAndVetoPersistenceTests
             MaxPlayers = 10,
             Status = LobbyStatus.Open
         });
+        var captainB = Guid.NewGuid();
+        db.Users.Add(new ApplicationUser
+        {
+            Id = captainB,
+            UserName = "capb",
+            DisplayName = "Cap B",
+            Email = "capb@example.com"
+        });
         db.LobbyMemberships.Add(new LobbyMembership
         {
             Id = Guid.NewGuid(),
@@ -46,6 +54,14 @@ public class MatchAndVetoPersistenceTests
             UserId = ownerId,
             Role = LobbyRole.Owner,
             Team = TeamSide.A
+        });
+        db.LobbyMemberships.Add(new LobbyMembership
+        {
+            Id = Guid.NewGuid(),
+            LobbyId = lobbyId,
+            UserId = captainB,
+            Role = LobbyRole.Captain,
+            Team = TeamSide.B
         });
 
         var defs = CompetitiveMaps.For(game);
@@ -98,7 +114,7 @@ public class MatchAndVetoPersistenceTests
         var fx = await SeedAsync();
         using (fx.Db)
         {
-            var match = await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo3);
+            var match = (await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo3)).Match;
             match.Should().NotBeNull();
 
             var started = await fx.Veto.StartAsync(match!.Id);
@@ -125,7 +141,7 @@ public class MatchAndVetoPersistenceTests
         var fx = await SeedAsync(Game.Cs2);
         using (fx.Db)
         {
-            var match = await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo1);
+            var match = (await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo1)).Match;
             var state = await fx.Veto.StartAsync(match!.Id);
             state.Should().NotBeNull();
 
@@ -161,7 +177,7 @@ public class MatchAndVetoPersistenceTests
         var fx = await SeedAsync(Game.Val);
         using (fx.Db)
         {
-            var match = await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo3);
+            var match = (await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo3)).Match;
             var summary = await fx.Matches.GetSummaryAsync(match!.Id);
             summary.Should().NotBeNull();
             summary!.Game.Should().Be("val");
@@ -177,7 +193,7 @@ public class MatchAndVetoPersistenceTests
         var fx = await SeedAsync();
         using (fx.Db)
         {
-            var match = await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo3);
+            var match = (await fx.Matches.StartFromLobbyAsync(fx.LobbyId, fx.OwnerId, BestOf.Bo3)).Match;
             var state = await fx.Veto.StartAsync(match!.Id);
             while (!state!.IsComplete)
             {

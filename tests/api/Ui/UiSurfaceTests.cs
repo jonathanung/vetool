@@ -30,8 +30,14 @@ public class UiSurfaceTests
         File.Exists(Path.Combine(WebRoot(), "app", "matches", "[id]", "page.tsx")).Should().BeTrue();
 
         var home = Read("app", "page.tsx");
-        home.Should().Contain("CS2");
-        home.Should().Contain("VALORANT");
+        home.Should().Contain("cs2");
+        home.Should().Contain("valorant");
+
+        var css = Read("app", "globals.css");
+        css.Should().Contain("#161618");
+        css.Should().Contain("#fafaf8");
+        css.Should().NotContain("#2563eb");
+        css.Should().NotContain("#8b5cf6");
 
         var lobbies = Read("app", "lobbies", "page.tsx");
         lobbies.Should().Contain("cs2");
@@ -53,9 +59,12 @@ public class UiSurfaceTests
 
         var lobby = Read("app", "lobbies", "[id]", "realtime.tsx");
         lobby.Should().Contain("Copy link");
-        lobby.Should().Contain("Start match");
-        lobby.Should().Contain("Leave");
-        lobby.Should().Contain("Captain Selection");
+        lobby.Should().Contain("start veto");
+        lobby.Should().Contain("need two captains");
+        lobby.Should().Contain("map pool");
+        lobby.Should().Contain("first pick");
+        lobby.Should().Contain("last pick");
+        lobby.Should().Contain("canStartVeto");
 
         var match = Read("app", "matches", "[id]", "VetoClient.tsx");
         match.Should().Contain("Join details");

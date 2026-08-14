@@ -223,15 +223,103 @@ public class LobbiesController : ControllerBase
         };
         try
         {
-            var match = await _matches.StartFromLobbyAsync(id, userId, bestOf);
-            if (match is null) return NotFound(new { message = "Lobby not found." });
-            var summary = await _matches.GetSummaryAsync(match.Id);
+            var started = await _matches.StartFromLobbyAsync(id, userId, bestOf);
+            if (!started.Succeeded)
+            {
+                return started.Error switch
+                {
+                    "not_found" => NotFound(new { message = "Lobby not found." }),
+                    MatchStartGate.NeedTwoPlayers => Conflict(new { message = "Need at least two players." }),
+                    MatchStartGate.NeedTwoCaptains => Conflict(new { message = "Need two captains before veto." }),
+                    _ => Conflict(new { message = started.Error })
+                };
+            }
+            var summary = await _matches.GetSummaryAsync(started.Match!.Id);
             return Ok(summary);
         }
         catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/captains")]
+    public async Task<IActionResult> SetCaptains(Guid id, [FromBody] SetCaptainsRequest req)
+    {
+        var snapshot = await _membership.SetCaptainsAsync(id, req.TeamAUserId, req.TeamBUserId);
+        if (snapshot is null) return BadRequest(new { message = "Captains must be in the lobby." });
+        return Ok(new { captainA = snapshot.CaptainA, captainB = snapshot.CaptainB, teamA = snapshot.TeamA, teamB = snapshot.TeamB });
+    }
+
+    [Authorize]
+    [HttpPut("{id:guid}/first-pick")]
+    public async Task<IActionResult> SetFirstPick(Guid id, [FromBody] FirstPickRequest req)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id);
+        if (lobby is null) return NotFound();
+        if (lobby.CreatedByUserId != userId) return Forbid();
+        var team = string.Equals(req.Team, "B", StringComparison.OrdinalIgnoreCase) ? TeamSide.B : TeamSide.A;
+        var maps = LobbyConfig.GetSelectedMapIds(lobby);
+        LobbyConfig.Write(lobby, LobbyConfig.GetIsPublic(lobby), team, maps);
+        await _db.SaveChangesAsync();
+        return Ok(new { firstPickTeam = team == TeamSide.B ? "B" : "A" });
+    }
+
+    [Authorize]
+    [HttpPut("{id:guid}/maps")]
+    public async Task<IActionResult> SetMaps(Guid id, [FromBody] LobbyMapsRequest req)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id);
+        if (lobby is null) return NotFound();
+        if (lobby.CreatedByUserId != userId) return Forbid();
+        var ids = (req.MapIds ?? []).Distinct().ToList();
+        if (ids.Count == 0) return BadRequest(new { message = "Select at least one map." });
+        var valid = await _db.Maps.AsNoTracking()
+            .Where(m => m.Game == lobby.Game && ids.Contains(m.Id))
+            .Select(m => m.Id)
+            .ToListAsync();
+        if (valid.Count != ids.Count) return BadRequest(new { message = "Unknown map for this game." });
+        LobbyConfig.Write(lobby, LobbyConfig.GetIsPublic(lobby), LobbyConfig.GetFirstPickTeam(lobby), ids);
+        await _db.SaveChangesAsync();
+        return Ok(await ShapeLobby(lobby, userId));
+    }
+
+    [HttpGet("{id:guid}/maps")]
+    public async Task<IActionResult> Maps(Guid id)
+    {
+        var lobby = await _db.Lobbies.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id);
+        if (lobby is null) return NotFound();
+        var catalog = await _db.Maps.AsNoTracking()
+            .Where(m => m.Game == lobby.Game)
+            .OrderBy(m => m.Name)
+            .Select(m => new { m.Id, m.Code, m.Name })
+            .ToListAsync();
+        var selected = LobbyConfig.GetSelectedMapIds(lobby);
+        if (selected.Count == 0)
+        {
+            var pool = await _db.MapPools.AsNoTracking()
+                .Where(p => p.Game == lobby.Game)
+                .OrderByDescending(p => p.EffectiveAt)
+                .FirstOrDefaultAsync();
+            if (pool is not null)
+            {
+                selected = await _db.MapPoolMaps.AsNoTracking()
+                    .Where(pm => pm.MapPoolId == pool.Id)
+                    .OrderBy(pm => pm.OrderIndex)
+                    .Select(pm => pm.GameMapId)
+                    .ToListAsync();
+            }
+        }
+        var selectedSet = selected.ToHashSet();
+        return Ok(new
+        {
+            firstPickTeam = LobbyConfig.GetFirstPickTeam(lobby) == TeamSide.B ? "B" : "A",
+            selected = catalog.Where(m => selectedSet.Contains(m.Id)),
+            catalog
+        });
     }
 
     [Authorize]
@@ -248,7 +336,12 @@ public class LobbiesController : ControllerBase
 
     private async Task<object> ShapeLobby(Lobby lobby, Guid? uid)
     {
-        var memberCount = await _db.LobbyMemberships.CountAsync(m => m.LobbyId == lobby.Id && m.LeftAt == null);
+        var seats = await _db.LobbyMemberships.AsNoTracking()
+            .Where(m => m.LobbyId == lobby.Id && m.LeftAt == null)
+            .Select(m => new { m.Role, m.Team })
+            .ToListAsync();
+        var memberCount = seats.Count;
+        var canStart = MatchStartGate.CanStart(seats.Select(s => (s.Role, s.Team)), out var startBlock);
         var matchId = await _matches.CurrentMatchIdAsync(lobby.Id);
         return new
         {
@@ -260,6 +353,10 @@ public class LobbiesController : ControllerBase
             lobby.MaxPlayers,
             MemberCount = memberCount,
             CurrentMatchId = matchId,
+            FirstPickTeam = LobbyConfig.GetFirstPickTeam(lobby) == TeamSide.B ? "B" : "A",
+            SelectedMapIds = LobbyConfig.GetSelectedMapIds(lobby),
+            CanStart = canStart,
+            StartBlock = startBlock,
             IsPublic = IsPublic(lobby),
             IsMine = uid.HasValue && lobby.CreatedByUserId == uid.Value
         };
@@ -351,3 +448,6 @@ public class LobbiesController : ControllerBase
 
 public record CreateLobbyRequest(Game Game, string Name, int? MaxPlayers, bool IsPublic);
 public record StartMatchRequest(int BestOf);
+public record SetCaptainsRequest(Guid TeamAUserId, Guid TeamBUserId);
+public record FirstPickRequest(string Team);
+public record LobbyMapsRequest(List<Guid>? MapIds);

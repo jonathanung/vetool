@@ -184,7 +184,7 @@ public class LobbyMembershipServiceTests
 
             var veto = new VetoSessionService(db);
             var matches = new MatchLifecycleService(db, veto);
-            var match = await matches.StartFromLobbyAsync(lobbyId, ownerId, BestOf.Bo1);
+            var match = (await matches.StartFromLobbyAsync(lobbyId, ownerId, BestOf.Bo1)).Match;
             match.Should().NotBeNull();
             (await veto.TeamForUserAsync(match!.Id, ownerId)).Should().Be(TeamSide.A);
             (await veto.TeamForUserAsync(match.Id, captainB)).Should().Be(TeamSide.B);

@@ -53,8 +53,8 @@ export default function LoginPage() {
     <div className="max-w-md mx-auto py-12 animate-fade-in">
       <div className="bento-card p-8 space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold">Welcome back</h1>
-          <p className="text-text-muted">Sign in to your account</p>
+          <h1 className="text-2xl font-bold lowercase">welcome back</h1>
+          <p className="text-text-muted lowercase">sign in to your account</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">

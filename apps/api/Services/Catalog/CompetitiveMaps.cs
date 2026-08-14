@@ -17,6 +17,14 @@ public static class CompetitiveMaps
         new(Game.Cs2, "train", "Train")
     ];
 
+    public static readonly IReadOnlyList<CompetitiveMapDef> Cs2Extras =
+    [
+        new(Game.Cs2, "anubis", "Anubis"),
+        new(Game.Cs2, "vertigo", "Vertigo"),
+        new(Game.Cs2, "cache", "Cache"),
+        new(Game.Cs2, "cobblestone", "Cobblestone")
+    ];
+
     public static readonly IReadOnlyList<CompetitiveMapDef> Val =
     [
         new(Game.Val, "ascent", "Ascent"),
@@ -28,11 +36,22 @@ public static class CompetitiveMaps
         new(Game.Val, "abyss", "Abyss")
     ];
 
+    public static readonly IReadOnlyList<CompetitiveMapDef> ValExtras =
+    [
+        new(Game.Val, "split", "Split"),
+        new(Game.Val, "pearl", "Pearl"),
+        new(Game.Val, "fracture", "Fracture"),
+        new(Game.Val, "breeze", "Breeze")
+    ];
+
     public static IReadOnlyList<CompetitiveMapDef> For(Game game) => game == Game.Val ? Val : Cs2;
+
+    public static IReadOnlyList<CompetitiveMapDef> Catalog(Game game)
+        => game == Game.Val ? Val.Concat(ValExtras).ToList() : Cs2.Concat(Cs2Extras).ToList();
 
     public static string Title(string code)
     {
-        foreach (var map in Cs2.Concat(Val))
+        foreach (var map in Cs2.Concat(Cs2Extras).Concat(Val).Concat(ValExtras))
         {
             if (string.Equals(map.Code, code, StringComparison.OrdinalIgnoreCase)) return map.Name;
         }

@@ -8,7 +8,16 @@ import {
   disconnect,
   type Member,
 } from '@/store/slices/lobbySlice'
-import { useJoinLobbyMutation, useJoinAsGuestMutation, useLeaveLobbyMutation, useStartMatchMutation } from '@/store/api/lobbiesApi'
+import {
+  useJoinLobbyMutation,
+  useJoinAsGuestMutation,
+  useLeaveLobbyMutation,
+  useStartMatchMutation,
+  useGetLobbyMapsQuery,
+  useSetLobbyMapsMutation,
+  useSetFirstPickMutation,
+} from '@/store/api/lobbiesApi'
+import { pickChoiceLabel, startingSide, type PickChoice } from '@/lib/vetoChoice'
 import { useGetMeQuery } from '@/store/api/authApi'
 import { addToast } from '@/store/slices/uiSlice'
 
@@ -36,11 +45,16 @@ export default function LobbyClient({
   const [joinAsGuest, { isLoading: guestLoading }] = useJoinAsGuestMutation()
   const [leaveLobby, { isLoading: leaving }] = useLeaveLobbyMutation()
   const [startMatch, { isLoading: starting }] = useStartMatchMutation()
+  const [setLobbyMaps, { isLoading: savingMaps }] = useSetLobbyMapsMutation()
+  const [setFirstPick] = useSetFirstPickMutation()
+  const { data: mapData } = useGetLobbyMapsQuery(lobbyId)
   const [bestOf, setBestOf] = useState(1)
   const [copied, setCopied] = useState(false)
+  const [pickChoice, setPickChoice] = useState<PickChoice>('first')
 
   const shareUrl = typeof window === 'undefined' ? '' : `${window.location.origin}/lobbies/${lobbyId}`
   const isHost = !!me?.id && !!hostUserId && me.id === hostUserId
+  const canStartVeto = Boolean(captainA && captainB && members.length >= 2)
 
   useEffect(() => {
     let active = true
@@ -114,12 +128,33 @@ export default function LobbyClient({
       router.push(`/matches/${currentMatchId}`)
       return
     }
+    if (!canStartVeto) {
+      dispatch(addToast({ type: 'error', message: 'need two captains' }))
+      return
+    }
     try {
+      await setFirstPick({ lobbyId, team: startingSide(pickChoice) }).unwrap()
       const result = await startMatch({ lobbyId, bestOf }).unwrap()
       const id = result?.id || result?.Id
       if (id) router.push(`/matches/${id}`)
     } catch {
-      dispatch(addToast({ type: 'error', message: 'Only the host can start a match' }))
+      dispatch(addToast({ type: 'error', message: 'need two captains before veto' }))
+    }
+  }
+
+  async function toggleMap(id: string) {
+    if (!mapData || !isHost) return
+    const selected = new Set((mapData.selected ?? []).map((m) => m.id))
+    if (selected.has(id)) selected.delete(id)
+    else selected.add(id)
+    if (selected.size === 0) {
+      dispatch(addToast({ type: 'error', message: 'keep at least one map' }))
+      return
+    }
+    try {
+      await setLobbyMaps({ lobbyId, mapIds: [...selected] }).unwrap()
+    } catch {
+      dispatch(addToast({ type: 'error', message: 'could not update maps' }))
     }
   }
 
@@ -184,7 +219,6 @@ export default function LobbyClient({
   }
 
   const isReconnecting = connectionStatus === 'reconnecting'
-  const teamsReady = Boolean(captainA && captainB)
 
   return (
     <div className="space-y-6">
@@ -288,32 +322,70 @@ export default function LobbyClient({
       </div>
 
       <div className="bento-card p-6 space-y-4">
+        <h2 className="font-semibold lowercase">map pool</h2>
+        <p className="text-sm text-text-muted lowercase">defaults to active duty / ranked. add or remove any catalog map.</p>
+        <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {(mapData?.catalog ?? []).map((m) => {
+            const on = (mapData?.selected ?? []).some((s) => s.id === m.id)
+            return (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  disabled={!isHost || savingMaps}
+                  onClick={() => toggleMap(m.id)}
+                  className={`w-full text-left px-3 py-2 rounded-bento-sm border text-sm ${on ? 'bg-primary text-primary-contrast border-primary' : 'border-border text-text-muted'}`}
+                >
+                  {m.name}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+
+      <div className="bento-card p-6 space-y-4">
         <div className="flex items-center gap-2">
-          <h2 className="font-semibold">Start match</h2>
+          <h2 className="font-semibold lowercase">start veto</h2>
           <span className="bento-badge bento-badge-muted">{game}</span>
         </div>
-        <p className="text-sm text-text-muted">
-          Host starts a {game} veto, then posts a connect string or party code so everyone can join the custom.
+        <p className="text-sm text-text-muted lowercase">
+          need two captains. choose first pick or last pick, then start.
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <div className="space-y-1.5">
-            <label className="text-sm text-text-secondary">Best of</label>
+            <label className="text-sm text-text-secondary lowercase">best of</label>
             <select className="bento-input min-w-[120px]" value={bestOf} onChange={(e) => setBestOf(Number(e.target.value))} disabled={!isHost}>
-              <option value={1}>BO1</option>
-              <option value={3}>BO3</option>
-              <option value={5}>BO5</option>
+              <option value={1}>bo1</option>
+              <option value={3}>bo3</option>
+              <option value={5}>bo5</option>
             </select>
           </div>
-          <button type="button" onClick={handleStart} disabled={!isHost || starting} className="bento-btn bento-btn-primary">
-            {starting ? 'Starting...' : currentMatchId ? 'Open match' : 'Start match'}
+          <div className="space-y-1.5">
+            <label className="text-sm text-text-secondary lowercase">team a wants</label>
+            <select
+              className="bento-input min-w-[140px]"
+              value={pickChoice}
+              onChange={(e) => setPickChoice(e.target.value as PickChoice)}
+              disabled={!isHost}
+            >
+              <option value="first">{pickChoiceLabel('first')}</option>
+              <option value="last">{pickChoiceLabel('last')}</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={!isHost || starting || (!currentMatchId && !canStartVeto)}
+            className="bento-btn bento-btn-primary lowercase"
+          >
+            {starting ? 'starting...' : currentMatchId ? 'open match' : 'start veto'}
           </button>
           {currentMatchId && (
-            <button type="button" onClick={() => router.push(`/matches/${currentMatchId}`)} className="bento-btn bento-btn-secondary">
-              Go to veto
+            <button type="button" onClick={() => router.push(`/matches/${currentMatchId}`)} className="bento-btn bento-btn-secondary lowercase">
+              go to veto
             </button>
           )}
-          {!isHost && <span className="text-xs text-text-muted">Waiting on the host.</span>}
-          {isHost && !teamsReady && <span className="text-xs text-text-muted">Captains help, but you can start whenever the room is ready.</span>}
+          {!canStartVeto && <span className="text-xs text-text-muted lowercase">need two captains</span>}
         </div>
       </div>
     </div>

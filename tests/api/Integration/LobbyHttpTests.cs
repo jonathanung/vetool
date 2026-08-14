@@ -51,6 +51,18 @@ public class LobbyHttpTests : IClassFixture<VetoolApiFactory>
         names.Should().Contain("http-host");
         names.Should().Contain("http-joiner");
 
+        var blocked = await cookieHost.PostAsJsonAsync($"/api/v1/lobbies/{lobbyId}/matches", new { bestOf = 1 });
+        blocked.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var hostId = (await cookieHost.GetFromJsonAsync<JsonElement>("/api/v1/auth/me")).GetProperty("id").GetGuid();
+        var joinerId = (await guest.GetFromJsonAsync<JsonElement>("/api/v1/auth/me")).GetProperty("id").GetGuid();
+        var captains = await cookieHost.PostAsJsonAsync($"/api/v1/lobbies/{lobbyId}/captains", new
+        {
+            teamAUserId = hostId,
+            teamBUserId = joinerId
+        });
+        captains.EnsureSuccessStatusCode();
+
         var start = await cookieHost.PostAsJsonAsync($"/api/v1/lobbies/{lobbyId}/matches", new { bestOf = 1 });
         start.EnsureSuccessStatusCode();
         var match = await start.Content.ReadFromJsonAsync<JsonElement>(Json);

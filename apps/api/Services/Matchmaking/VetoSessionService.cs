@@ -33,20 +33,25 @@ public sealed class VetoSessionService
         var lobby = await _db.Lobbies.AsNoTracking().FirstOrDefaultAsync(l => l.Id == match.LobbyId, ct);
         if (lobby is null) return null;
 
-        var pool = await _db.MapPools.AsNoTracking()
-            .Where(p => p.Game == lobby.Game)
-            .OrderByDescending(p => p.EffectiveAt)
-            .FirstOrDefaultAsync(ct);
-        if (pool is null) return null;
+        var maps = LobbyConfig.GetSelectedMapIds(lobby).ToList();
+        if (maps.Count == 0)
+        {
+            var pool = await _db.MapPools.AsNoTracking()
+                .Where(p => p.Game == lobby.Game)
+                .OrderByDescending(p => p.EffectiveAt)
+                .FirstOrDefaultAsync(ct);
+            if (pool is null) return null;
 
-        var maps = await _db.MapPoolMaps.AsNoTracking()
-            .Where(pm => pm.MapPoolId == pool.Id)
-            .OrderBy(pm => pm.OrderIndex)
-            .Select(pm => pm.GameMapId)
-            .ToListAsync(ct);
+            maps = await _db.MapPoolMaps.AsNoTracking()
+                .Where(pm => pm.MapPoolId == pool.Id)
+                .OrderBy(pm => pm.OrderIndex)
+                .Select(pm => pm.GameMapId)
+                .ToListAsync(ct);
+        }
         if (maps.Count == 0) return null;
 
-        var state = VetoEngine.Create(requested ?? match.BestOf, maps);
+        var firstPick = LobbyConfig.GetFirstPickTeam(lobby);
+        var state = VetoEngine.Create(lobby.Game, requested ?? match.BestOf, maps, firstPick);
         if (existing is null)
         {
             existing = new VetoSession { Id = Guid.NewGuid(), MatchId = matchId };

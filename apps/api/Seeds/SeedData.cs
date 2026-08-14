@@ -72,11 +72,11 @@ public static class SeedData
 
     public static async Task EnsureMapsAndPoolsAsync(AppDbContext db)
     {
-        await UpsertGame(db, Game.Cs2, "Active Duty", CompetitiveMaps.Cs2);
-        await UpsertGame(db, Game.Val, "Competitive", CompetitiveMaps.Val);
+        await UpsertGame(db, Game.Cs2, "Active Duty", CompetitiveMaps.Cs2, CompetitiveMaps.Cs2Extras);
+        await UpsertGame(db, Game.Val, "Competitive", CompetitiveMaps.Val, CompetitiveMaps.ValExtras);
     }
 
-    private static async Task UpsertGame(AppDbContext db, Game game, string label, IReadOnlyList<CompetitiveMapDef> defs)
+    private static async Task UpsertGame(AppDbContext db, Game game, string label, IReadOnlyList<CompetitiveMapDef> defs, IReadOnlyList<CompetitiveMapDef>? extras = null)
     {
         var existingMaps = await db.Maps.Where(m => m.Game == game).ToListAsync();
         var byCode = existingMaps.ToDictionary(m => m.Code, StringComparer.OrdinalIgnoreCase);
@@ -103,6 +103,21 @@ public static class SeedData
                 db.Maps.Add(created);
                 byCode[def.Code] = created;
             }
+        }
+
+        foreach (var def in extras ?? [])
+        {
+            if (byCode.ContainsKey(def.Code)) continue;
+            var created = new GameMap
+            {
+                Id = Guid.NewGuid(),
+                Game = game,
+                Code = def.Code,
+                Name = def.Name,
+                IsActive = true
+            };
+            db.Maps.Add(created);
+            byCode[def.Code] = created;
         }
 
         await db.SaveChangesAsync();

@@ -19,6 +19,12 @@ public sealed record VetoView(
     IReadOnlyList<Guid> Picks,
     IReadOnlyList<Guid> Bans);
 
+public sealed record StartMatchResult(bool Succeeded, string? Error, Match? Match)
+{
+    public static StartMatchResult Ok(Match match) => new(true, null, match);
+    public static StartMatchResult Fail(string error) => new(false, error, null);
+}
+
 public sealed record MatchSummary(
     Guid Id,
     Guid LobbyId,
@@ -44,15 +50,22 @@ public sealed class MatchLifecycleService
         _veto = veto;
     }
 
-    public async Task<Match?> StartFromLobbyAsync(Guid lobbyId, Guid userId, BestOf bestOf, CancellationToken ct = default)
+    public async Task<StartMatchResult> StartFromLobbyAsync(Guid lobbyId, Guid userId, BestOf bestOf, CancellationToken ct = default)
     {
         var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == lobbyId, ct);
-        if (lobby is null) return null;
+        if (lobby is null) return StartMatchResult.Fail("not_found");
         if (lobby.CreatedByUserId != userId) throw new UnauthorizedAccessException();
+
+        var seats = await _db.LobbyMemberships.AsNoTracking()
+            .Where(m => m.LobbyId == lobbyId && m.LeftAt == null)
+            .Select(m => new { m.Role, m.Team })
+            .ToListAsync(ct);
+        if (!MatchStartGate.CanStart(seats.Select(s => (s.Role, s.Team)), out var gateError))
+            return StartMatchResult.Fail(gateError ?? MatchStartGate.NeedTwoCaptains);
 
         var existing = await _db.Matches.FirstOrDefaultAsync(
             m => m.LobbyId == lobbyId && m.Status != MatchStatus.Canceled && m.Status != MatchStatus.Completed, ct);
-        if (existing is not null) return existing;
+        if (existing is not null) return StartMatchResult.Ok(existing);
 
         var match = new Match
         {
@@ -67,7 +80,7 @@ public sealed class MatchLifecycleService
         lobby.Status = LobbyStatus.InProgress;
         lobby.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
-        return match;
+        return StartMatchResult.Ok(match);
     }
 
     public async Task<MatchSummary?> GetSummaryAsync(Guid matchId, CancellationToken ct = default)
@@ -91,6 +104,13 @@ public sealed class MatchLifecycleService
                 .OrderBy(x => x.OrderIndex)
                 .Select(x => new MapView(x.Id, x.Code, x.Name))
                 .ToListAsync(ct);
+        }
+
+        var selectedPool = LobbyConfig.GetSelectedMapIds(lobby);
+        if (selectedPool.Count > 0)
+        {
+            var allow = selectedPool.ToHashSet();
+            maps = maps.Where(m => allow.Contains(m.Id)).ToList();
         }
 
         var mapById = maps.ToDictionary(m => m.Id);

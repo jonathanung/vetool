@@ -121,6 +121,29 @@ export const lobbiesApi = baseApi.injectEndpoints({
       ],
     }),
 
+    getLobbyMaps: builder.query<{ firstPickTeam: string; selected: { id: string; code: string; name: string }[]; catalog: { id: string; code: string; name: string }[] }, string>({
+      query: (id) => `/lobbies/${id}/maps`,
+      providesTags: (_r, _e, id) => [{ type: 'Lobby', id: `${id}-maps` }],
+    }),
+
+    setLobbyMaps: builder.mutation<any, { lobbyId: string; mapIds: string[] }>({
+      query: ({ lobbyId, mapIds }) => ({
+        url: `/lobbies/${lobbyId}/maps`,
+        method: 'PUT',
+        body: { mapIds },
+      }),
+      invalidatesTags: (_r, _e, { lobbyId }) => [{ type: 'Lobby', id: lobbyId }, { type: 'Lobby', id: `${lobbyId}-maps` }],
+    }),
+
+    setFirstPick: builder.mutation<any, { lobbyId: string; team: 'A' | 'B' }>({
+      query: ({ lobbyId, team }) => ({
+        url: `/lobbies/${lobbyId}/first-pick`,
+        method: 'PUT',
+        body: { team },
+      }),
+      invalidatesTags: (_r, _e, { lobbyId }) => [{ type: 'Lobby', id: lobbyId }, { type: 'Lobby', id: `${lobbyId}-maps` }],
+    }),
+
     startMatch: builder.mutation<any, { lobbyId: string; bestOf: number }>({
       query: ({ lobbyId, bestOf }) => ({
         url: `/lobbies/${lobbyId}/matches`,
@@ -145,5 +168,8 @@ export const {
   useJoinLobbyMutation,
   useJoinAsGuestMutation,
   useLeaveLobbyMutation,
+  useGetLobbyMapsQuery,
+  useSetLobbyMapsMutation,
+  useSetFirstPickMutation,
   useStartMatchMutation,
 } = lobbiesApi

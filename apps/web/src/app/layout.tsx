@@ -1,24 +1,25 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Outfit } from 'next/font/google'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 import { ThemeProvider, ThemeSwitcher } from '@/components/theme/ThemeProvider'
 import StoreProvider from '@/store/StoreProvider'
 import Toaster from '@/components/ui/Toaster'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'], variable: '--font-body' })
+const outfit = Outfit({ subsets: ['latin'], variable: '--font-display' })
 const UserMenu = dynamic(() => import('@/components/nav/UserMenu'), { ssr: false })
 
 export const metadata: Metadata = {
-  title: 'VeTool',
-  description: 'Organize CS2 and VALORANT custom games — lobbies, draft, map veto, join codes.',
+  title: 'vetool',
+  description: 'organize cs2 and valorant custom games',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen bg-bg text-text`}>
+      <body className={`${inter.variable} ${outfit.variable} ${inter.className} min-h-screen bg-bg text-text`}>
         <StoreProvider>
           <ThemeProvider>
             <div className="min-h-screen flex flex-col">
@@ -26,16 +27,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <nav className="container mx-auto flex items-center justify-between h-16 px-4">
                   <Link
                     href="/"
-                    className="text-lg font-semibold tracking-tight hover:text-primary transition-colors"
+                    className="text-lg font-semibold tracking-tight hover:text-primary transition-colors lowercase"
+                    style={{ fontFamily: 'var(--font-display), sans-serif' }}
                   >
-                    VeTool
+                    vetool
                   </Link>
                   <div className="flex items-center gap-2">
                     <Link
                       href="/lobbies"
-                      className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-bg-secondary rounded-bento-sm transition-all"
+                      className="px-4 py-2 text-sm font-medium text-text-secondary hover:text-text hover:bg-bg-secondary rounded-bento-sm transition-all lowercase"
                     >
-                      Lobbies
+                      lobbies
                     </Link>
                     <div className="w-px h-5 bg-border mx-1" />
                     <ThemeSwitcher />
@@ -48,7 +50,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </main>
               <footer className="border-t border-border py-6">
                 <div className="container mx-auto px-4 text-center text-sm text-text-muted">
-                  VeTool — CS2 & VALORANT custom games
+                  vetool — custom games
                 </div>
               </footer>
             </div>

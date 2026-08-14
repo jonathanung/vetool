@@ -54,6 +54,9 @@ public static class VetoEngine
     };
 
     public static IReadOnlyList<VetoStep> BuildSequence(BestOf bestOf, int mapCount)
+        => BuildSequence(Game.Cs2, bestOf, mapCount, TeamSide.A);
+
+    public static IReadOnlyList<VetoStep> BuildSequence(Game game, BestOf bestOf, int mapCount, TeamSide firstPick)
     {
         var steps = new List<VetoStep>();
         if (mapCount <= 0) return steps;
@@ -61,7 +64,8 @@ public static class VetoEngine
         var targetPicks = Math.Clamp((int)bestOf, 1, mapCount);
         var explicitPicks = Math.Max(0, targetPicks - 1);
         var explicitBans = Math.Max(0, mapCount - targetPicks);
-        var team = TeamSide.A;
+        var team = firstPick == TeamSide.B ? TeamSide.B : TeamSide.A;
+        _ = game;
 
         void Add(VetoStepKind kind, int count)
         {
@@ -91,8 +95,11 @@ public static class VetoEngine
     }
 
     public static VetoState Create(BestOf bestOf, IReadOnlyList<Guid> maps)
+        => Create(Game.Cs2, bestOf, maps, TeamSide.A);
+
+    public static VetoState Create(Game game, BestOf bestOf, IReadOnlyList<Guid> maps, TeamSide firstPick)
     {
-        var sequence = BuildSequence(bestOf, maps.Count).ToList();
+        var sequence = BuildSequence(game, bestOf, maps.Count, firstPick).ToList();
         var firstTeam = sequence.Count > 0 && sequence[0].Kind != VetoStepKind.AutoPick
             ? sequence[0].Team
             : TeamSide.Unassigned;

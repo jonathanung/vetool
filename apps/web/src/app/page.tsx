@@ -6,10 +6,10 @@ export default function Home() {
       {/* Hero Section */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-          Share a link. Draft. Veto. Play.
+          share a link. draft. veto. play.
         </h1>
         <p className="text-lg text-text-muted max-w-xl mx-auto">
-          The custom-game organizer for CS2 and VALORANT — live lobbies, 1-2-2-2-1 captain draft, BO1/BO3/BO5 veto, then a copyable connect string or party code.
+          organize cs2 and valorant customs — live lobbies, captain draft, tournament veto, then a connect string.
         </p>
       </div>
 
