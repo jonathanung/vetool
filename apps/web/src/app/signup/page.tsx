@@ -4,12 +4,19 @@ import Link from 'next/link'
 import { getApiBase } from '@/lib/config'
 
 async function api(path: string, body: any) {
-  const res = await fetch(`${getApiBase()}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-    credentials: 'include',
-  })
+  let res: Response
+  try {
+    res = await fetch(`${getApiBase()}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      credentials: 'include',
+    })
+  } catch {
+    throw new Error(
+      `Could not reach the API at ${getApiBase()}${path}. Open this host in the browser (http://<this-computer>:3000), not localhost on your Mac.`
+    )
+  }
 
   let data: any
   try {

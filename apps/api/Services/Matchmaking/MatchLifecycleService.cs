@@ -90,27 +90,32 @@ public sealed class MatchLifecycleService
         var lobby = await _db.Lobbies.AsNoTracking().FirstOrDefaultAsync(l => l.Id == match.LobbyId, ct);
         if (lobby is null) return null;
 
-        var pool = await _db.MapPools.AsNoTracking()
-            .Where(p => p.Game == lobby.Game)
-            .OrderByDescending(p => p.EffectiveAt)
-            .FirstOrDefaultAsync(ct);
-
         var maps = new List<MapView>();
-        if (pool is not null)
-        {
-            maps = await _db.MapPoolMaps.AsNoTracking()
-                .Where(pm => pm.MapPoolId == pool.Id)
-                .Join(_db.Maps, pm => pm.GameMapId, m => m.Id, (pm, m) => new { m.Id, m.Code, m.Name, pm.OrderIndex })
-                .OrderBy(x => x.OrderIndex)
-                .Select(x => new MapView(x.Id, x.Code, x.Name))
-                .ToListAsync(ct);
-        }
-
         var selectedPool = LobbyConfig.GetSelectedMapIds(lobby);
         if (selectedPool.Count > 0)
         {
-            var allow = selectedPool.ToHashSet();
-            maps = maps.Where(m => allow.Contains(m.Id)).ToList();
+            var catalog = await _db.Maps.AsNoTracking()
+                .Where(m => selectedPool.Contains(m.Id))
+                .Select(m => new MapView(m.Id, m.Code, m.Name))
+                .ToListAsync(ct);
+            var byId = catalog.ToDictionary(m => m.Id);
+            maps = selectedPool.Where(id => byId.ContainsKey(id)).Select(id => byId[id]).ToList();
+        }
+        else
+        {
+            var pool = await _db.MapPools.AsNoTracking()
+                .Where(p => p.Game == lobby.Game)
+                .OrderByDescending(p => p.EffectiveAt)
+                .FirstOrDefaultAsync(ct);
+            if (pool is not null)
+            {
+                maps = await _db.MapPoolMaps.AsNoTracking()
+                    .Where(pm => pm.MapPoolId == pool.Id)
+                    .Join(_db.Maps, pm => pm.GameMapId, m => m.Id, (pm, m) => new { m.Id, m.Code, m.Name, pm.OrderIndex })
+                    .OrderBy(x => x.OrderIndex)
+                    .Select(x => new MapView(x.Id, x.Code, x.Name))
+                    .ToListAsync(ct);
+            }
         }
 
         var mapById = maps.ToDictionary(m => m.Id);

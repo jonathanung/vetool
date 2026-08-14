@@ -18,7 +18,7 @@ docker compose down
 ```
 
 **Access the application:**
-- Web (published on all interfaces): http://localhost:3000 or `http://<this-host>:3000` from another machine
+- Web (IPv4 and IPv6): http://localhost:3000 or `http://<this-host>:3000` from another machine (LAN IP or Tailscale MagicDNS)
 - API: http://localhost:5001
 - API Health: http://localhost:5001/health
 - Demo login: `demo` / `DemoPass123!`
@@ -51,9 +51,8 @@ Key environment variables:
 - `POSTGRES_*`: Database connection settings
 - `REDIS_CONNECTION`: Redis connection string
 - `JWT__Secret`: JWT signing secret (must be set so sessions survive API restarts)
-- `CORS_ORIGINS`: comma-separated browser origins (required for a non-localhost web host)
-- `NEXT_PUBLIC_API_BASE`: browser-facing API URL (compose uses `http://localhost:5001/api/v1`)
-- `API_BASE_INTERNAL`: server-side API URL inside Docker (`http://api:8080/api/v1`)
+- `CORS_ORIGINS`: comma-separated browser origins (optional; any `:3000` origin is already allowed)
+- `API_BASE_INTERNAL`: server-side API URL inside Docker (`http://api:8080/api/v1`). The browser uses same-origin `/api/v1`.
 
 ### Docker Services
 

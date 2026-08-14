@@ -109,4 +109,93 @@ public class TournamentVetoTests
         state!.Available.Concat(state.Picks).Concat(state.Bans).Should().BeEquivalentTo(keep);
         state.Available.Count.Should().Be(5);
     }
+
+    [Fact]
+    public async Task Extra_catalog_map_is_in_veto_available_and_match_summary()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        await using var db = new AppDbContext(options);
+        var owner = Guid.NewGuid();
+        var capB = Guid.NewGuid();
+        var lobbyId = Guid.NewGuid();
+        db.Users.AddRange(
+            new ApplicationUser { Id = owner, UserName = "a", DisplayName = "A", Email = "a@e.com" },
+            new ApplicationUser { Id = capB, UserName = "b", DisplayName = "B", Email = "b@e.com" });
+        var lobby = new Domain.Entities.Lobby
+        {
+            Id = lobbyId,
+            Name = "Extras",
+            Game = Game.Cs2,
+            CreatedByUserId = owner,
+            MaxPlayers = 10
+        };
+        db.Lobbies.Add(lobby);
+        db.LobbyMemberships.AddRange(
+            new LobbyMembership { Id = Guid.NewGuid(), LobbyId = lobbyId, UserId = owner, Role = LobbyRole.Owner, Team = TeamSide.A },
+            new LobbyMembership { Id = Guid.NewGuid(), LobbyId = lobbyId, UserId = capB, Role = LobbyRole.Captain, Team = TeamSide.B });
+
+        var pool = new MapPool
+        {
+            Id = Guid.NewGuid(),
+            Game = Game.Cs2,
+            Label = "Active Duty",
+            Source = MapPoolSource.Manual,
+            EffectiveAt = DateTime.UtcNow
+        };
+        db.MapPools.Add(pool);
+        var official = new List<GameMap>();
+        var order = 0;
+        foreach (var def in CompetitiveMaps.Cs2)
+        {
+            var map = new GameMap { Id = Guid.NewGuid(), Game = Game.Cs2, Code = def.Code, Name = def.Name, IsActive = true };
+            official.Add(map);
+            db.Maps.Add(map);
+            db.MapPoolMaps.Add(new MapPoolMap
+            {
+                Id = Guid.NewGuid(),
+                MapPoolId = pool.Id,
+                GameMapId = map.Id,
+                OrderIndex = order++
+            });
+        }
+
+        var extraDef = CompetitiveMaps.Cs2Extras.Single(m => m.Code == "anubis");
+        var extra = new GameMap
+        {
+            Id = Guid.NewGuid(),
+            Game = Game.Cs2,
+            Code = extraDef.Code,
+            Name = extraDef.Name,
+            IsActive = true
+        };
+        db.Maps.Add(extra);
+        CompetitiveMaps.Cs2.Should().NotContain(m => m.Code == extra.Code);
+
+        var selected = official.Select(m => m.Id).Append(extra.Id).ToList();
+        LobbyConfig.Write(lobby, true, TeamSide.A, selected);
+        await db.SaveChangesAsync();
+
+        var veto = new VetoSessionService(db);
+        var matches = new MatchLifecycleService(db, veto);
+        var started = await matches.StartFromLobbyAsync(lobbyId, owner, BestOf.Bo3);
+        started.Succeeded.Should().BeTrue();
+        started.Match.Should().NotBeNull();
+
+        var summaryBeforeVeto = await matches.GetSummaryAsync(started.Match!.Id);
+        summaryBeforeVeto.Should().NotBeNull();
+        summaryBeforeVeto!.Maps.Select(m => m.Id).Should().Contain(extra.Id);
+        summaryBeforeVeto.Maps.Should().Contain(m => m.Id == extra.Id && m.Code == "anubis" && m.Name == "Anubis");
+
+        var state = await veto.StartAsync(started.Match.Id);
+        state.Should().NotBeNull();
+        state!.Available.Should().Contain(extra.Id);
+
+        var summary = await matches.GetSummaryAsync(started.Match.Id);
+        summary.Should().NotBeNull();
+        summary!.Maps.Select(m => m.Id).Should().Contain(extra.Id);
+        summary.Maps.Should().Contain(m => m.Id == extra.Id && m.Name == "Anubis");
+        summary.Maps.Select(m => m.Id).Should().BeEquivalentTo(selected);
+    }
 }
