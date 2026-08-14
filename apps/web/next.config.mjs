@@ -7,9 +7,10 @@ const nextConfig = {
   output: 'standalone',
   async rewrites() {
     const rawApiBase =
+      process.env.API_BASE_INTERNAL ||
       process.env.NEXT_PUBLIC_API_BASE ||
       process.env.NEXT_PUBLIC_API_BASE_URL ||
-      'http://localhost:5000/api/v1'
+      'http://127.0.0.1:5001/api/v1'
     const normalizeApiBase = (input) => {
       const trimmed = input.replace(/\/$/, '')
       if (/\/api\/v\d+$/i.test(trimmed) || /\/api$/i.test(trimmed)) {

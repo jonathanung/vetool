@@ -1,11 +1,9 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react'
-import { API_BASE } from '@/lib/config'
-
-// Base API configuration for RTK Query
+// Same-origin so a remote browser does not call localhost on the client machine.
 export const baseApi = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: API_BASE,
+    baseUrl: '/api/v1',
     credentials: 'include',
     prepareHeaders: (headers) => {
       headers.set('Content-Type', 'application/json')

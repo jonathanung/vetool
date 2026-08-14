@@ -1,9 +1,9 @@
 "use client"
 import * as signalR from '@microsoft/signalr'
-import { HUB_LOBBY_URL, HUB_VETO_URL } from './config'
+import { getHubLobbyUrl, getHubVetoUrl } from './config'
 
 export function connectLobbyHub(lobbyId: string, onEvent: (event: any) => void) {
-  const hubUrl = HUB_LOBBY_URL
+  const hubUrl = getHubLobbyUrl()
   const connection = new signalR.HubConnectionBuilder()
     .withUrl(hubUrl, { withCredentials: true })
     .withAutomaticReconnect()
@@ -25,7 +25,7 @@ export function connectLobbyHub(lobbyId: string, onEvent: (event: any) => void) 
 }
 
 export function connectVetoHub(matchId: string, handlers: Record<string, (e: any)=>void>) {
-  const hubUrl = HUB_VETO_URL
+  const hubUrl = getHubVetoUrl()
   const connection = new signalR.HubConnectionBuilder()
     .withUrl(hubUrl, { withCredentials: true })
     .withAutomaticReconnect()

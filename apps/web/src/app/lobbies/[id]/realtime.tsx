@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import CaptainPicker from '@/components/captain/CaptainPicker'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import {
@@ -7,15 +8,39 @@ import {
   disconnect,
   type Member,
 } from '@/store/slices/lobbySlice'
-import { useJoinLobbyMutation, useJoinAsGuestMutation } from '@/store/api/lobbiesApi'
+import { useJoinLobbyMutation, useJoinAsGuestMutation, useLeaveLobbyMutation, useStartMatchMutation } from '@/store/api/lobbiesApi'
+import { useGetMeQuery } from '@/store/api/authApi'
 import { addToast } from '@/store/slices/uiSlice'
 
-export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: string; initialMembers: Member[] }) {
+export default function LobbyClient({
+  lobbyId,
+  initialMembers,
+  game,
+  maxPlayers,
+  currentMatchId,
+  hostUserId,
+}: {
+  lobbyId: string
+  initialMembers: Member[]
+  game: string
+  maxPlayers: number
+  currentMatchId: string | null
+  hostUserId: string | null
+}) {
   const dispatch = useAppDispatch()
-  const { connectionStatus, teamA, teamB, members, error } = useAppSelector((state) => state.lobby)
+  const router = useRouter()
+  const { connectionStatus, teamA, teamB, members, error, captainA, captainB } = useAppSelector((state) => state.lobby)
+  const { data: me } = useGetMeQuery()
 
   const [joinLobby, { isLoading: joining, error: joinError }] = useJoinLobbyMutation()
   const [joinAsGuest, { isLoading: guestLoading }] = useJoinAsGuestMutation()
+  const [leaveLobby, { isLoading: leaving }] = useLeaveLobbyMutation()
+  const [startMatch, { isLoading: starting }] = useStartMatchMutation()
+  const [bestOf, setBestOf] = useState(1)
+  const [copied, setCopied] = useState(false)
+
+  const shareUrl = typeof window === 'undefined' ? '' : `${window.location.origin}/lobbies/${lobbyId}`
+  const isHost = !!me?.id && !!hostUserId && me.id === hostUserId
 
   useEffect(() => {
     let active = true
@@ -28,7 +53,13 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
         }
       } catch (err: any) {
         if (active) {
-          dispatch(addToast({ type: 'error', message: `Failed to join lobby (${err?.status || 'unknown'})` }))
+          const status = err?.status
+          const message = status === 409
+            ? 'This lobby is full.'
+            : status === 404
+              ? 'Lobby not found.'
+              : `Failed to join lobby (${status || 'unknown'})`
+          dispatch(addToast({ type: 'error', message }))
         }
       }
     }
@@ -39,7 +70,7 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
       active = false
       dispatch(disconnect())
     }
-  }, [dispatch, lobbyId, initialMembers, joinLobby])
+  }, [dispatch, lobbyId, joinLobby])
 
   const memberMap = useMemo(() => {
     const m = new Map<string, string>()
@@ -58,7 +89,47 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
       await joinLobby(lobbyId).unwrap()
       dispatch(connect({ lobbyId, initialMembers }))
     } catch (err: any) {
-      dispatch(addToast({ type: 'error', message: `Guest join failed (${err?.status || 'unknown'})` }))
+      const status = err?.status
+      dispatch(addToast({
+        type: 'error',
+        message: status === 409 ? 'This lobby is full.' : status === 404 ? 'Lobby not found.' : `Guest join failed (${status || 'unknown'})`,
+      }))
+    }
+  }
+
+  async function handleCopy() {
+    const url = `${window.location.origin}/lobbies/${lobbyId}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      dispatch(addToast({ type: 'success', message: 'Invite link copied' }))
+      setTimeout(() => setCopied(false), 1600)
+    } catch {
+      dispatch(addToast({ type: 'error', message: 'Could not copy link' }))
+    }
+  }
+
+  async function handleStart() {
+    if (currentMatchId) {
+      router.push(`/matches/${currentMatchId}`)
+      return
+    }
+    try {
+      const result = await startMatch({ lobbyId, bestOf }).unwrap()
+      const id = result?.id || result?.Id
+      if (id) router.push(`/matches/${id}`)
+    } catch {
+      dispatch(addToast({ type: 'error', message: 'Only the host can start a match' }))
+    }
+  }
+
+  async function handleLeave() {
+    try {
+      await leaveLobby(lobbyId).unwrap()
+      dispatch(disconnect())
+      router.push('/lobbies')
+    } catch {
+      dispatch(addToast({ type: 'error', message: 'Could not leave lobby' }))
     }
   }
 
@@ -73,15 +144,10 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
           </div>
           <div className="space-y-1">
             <h3 className="font-semibold">Unable to join lobby</h3>
-            <p className="text-sm text-text-muted">You may need to join as a guest to participate.</p>
+            <p className="text-sm text-text-muted">The lobby may be full, missing, or you need to join as a guest.</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={handleGuestJoin}
-          disabled={guestLoading}
-          className="bento-btn bento-btn-primary"
-        >
+        <button type="button" onClick={handleGuestJoin} disabled={guestLoading} className="bento-btn bento-btn-primary">
           {guestLoading ? 'Joining...' : 'Join as Guest'}
         </button>
       </div>
@@ -110,11 +176,7 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
             <p className="text-sm text-text-muted">{error || 'Unable to connect to the lobby'}</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => dispatch(connect({ lobbyId, initialMembers }))}
-          className="bento-btn bento-btn-secondary"
-        >
+        <button type="button" onClick={() => dispatch(connect({ lobbyId, initialMembers }))} className="bento-btn bento-btn-secondary">
           Retry Connection
         </button>
       </div>
@@ -122,6 +184,7 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
   }
 
   const isReconnecting = connectionStatus === 'reconnecting'
+  const teamsReady = Boolean(captainA && captainB)
 
   return (
     <div className="space-y-6">
@@ -132,13 +195,27 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Reconnecting...
+            Reconnecting... membership is still saved.
           </div>
         </div>
       )}
 
+      <div className="bento-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-xs uppercase tracking-wide text-text-muted mb-1">Share lobby</div>
+          <div className="font-mono text-sm truncate text-text-secondary">{shareUrl || `/lobbies/${lobbyId}`}</div>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={handleCopy} className="bento-btn bento-btn-secondary">
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
+          <button type="button" onClick={handleLeave} disabled={leaving} className="bento-btn bento-btn-ghost">
+            Leave
+          </button>
+        </div>
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Captain Selection */}
         <div className="bento-card p-6 space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-bento-sm bg-primary-soft flex items-center justify-center">
@@ -147,11 +224,11 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
               </svg>
             </div>
             <h2 className="font-semibold">Captain Selection</h2>
+            <span className="text-xs text-text-muted ml-auto">{members.length}/{maxPlayers}</span>
           </div>
           <CaptainPicker players={members} />
         </div>
 
-        {/* Team Overview */}
         <div className="bento-card p-6 space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-bento-sm bg-accent-soft flex items-center justify-center">
@@ -178,7 +255,6 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
                 )}
               </ul>
             </div>
-
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-accent">Team B</h3>
               <ul className="space-y-1.5">
@@ -193,7 +269,6 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
                 )}
               </ul>
             </div>
-
             <div className="space-y-2">
               <h3 className="text-sm font-medium text-text-muted">Unassigned</h3>
               <ul className="space-y-1.5">
@@ -209,6 +284,36 @@ export default function LobbyClient({ lobbyId, initialMembers }: { lobbyId: stri
               </ul>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bento-card p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold">Start match</h2>
+          <span className="bento-badge bento-badge-muted">{game}</span>
+        </div>
+        <p className="text-sm text-text-muted">
+          Host starts a {game} veto, then posts a connect string or party code so everyone can join the custom.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <label className="text-sm text-text-secondary">Best of</label>
+            <select className="bento-input min-w-[120px]" value={bestOf} onChange={(e) => setBestOf(Number(e.target.value))} disabled={!isHost}>
+              <option value={1}>BO1</option>
+              <option value={3}>BO3</option>
+              <option value={5}>BO5</option>
+            </select>
+          </div>
+          <button type="button" onClick={handleStart} disabled={!isHost || starting} className="bento-btn bento-btn-primary">
+            {starting ? 'Starting...' : currentMatchId ? 'Open match' : 'Start match'}
+          </button>
+          {currentMatchId && (
+            <button type="button" onClick={() => router.push(`/matches/${currentMatchId}`)} className="bento-btn bento-btn-secondary">
+              Go to veto
+            </button>
+          )}
+          {!isHost && <span className="text-xs text-text-muted">Waiting on the host.</span>}
+          {isHost && !teamsReady && <span className="text-xs text-text-muted">Captains help, but you can start whenever the room is ready.</span>}
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
+using VeTool.Api.Services.Catalog;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
 using VeTool.Domain.Enums;
@@ -42,7 +43,7 @@ public sealed class ValPoolProvider : IValPoolProvider
             return _envList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Select(s => s.ToLowerInvariant()).ToList();
         }
-        return new[] { "ascent", "bind", "haven", "sunset", "lotus", "icebox" };
+        return CompetitiveMaps.Val.Select(m => m.Code).ToList();
     }
 
     public async Task UpsertCompetitiveAsync(AppDbContext db, CancellationToken ct = default)
@@ -57,17 +58,29 @@ public sealed class ValPoolProvider : IValPoolProvider
             EffectiveAt = DateTime.UtcNow
         };
         db.MapPools.Add(pool);
-        var existing = await db.Maps.Where(m => m.Game == Game.Val && names.Contains(m.Code)).ToListAsync(ct);
-        var mapByCode = existing.ToDictionary(m => m.Code, m => m);
+        var existing = await db.Maps.Where(m => m.Game == Game.Val).ToListAsync(ct);
+        var mapByCode = existing.ToDictionary(m => m.Code, StringComparer.OrdinalIgnoreCase);
+        var order = 0;
         foreach (var code in names)
         {
             if (!mapByCode.TryGetValue(code, out var map))
             {
-                map = new GameMap { Id = Guid.NewGuid(), Game = Game.Val, Code = code, Name = code.ToUpperInvariant(), IsActive = true };
+                map = new GameMap
+                {
+                    Id = Guid.NewGuid(),
+                    Game = Game.Val,
+                    Code = code,
+                    Name = CompetitiveMaps.Title(code),
+                    IsActive = true
+                };
                 db.Maps.Add(map);
             }
-            db.MapPoolMaps.Add(new MapPoolMap { Id = Guid.NewGuid(), MapPoolId = pool.Id, GameMapId = map.Id, OrderIndex = db.MapPoolMaps.Count(m => m.MapPoolId == pool.Id) });
+            else if (map.Name == map.Code.ToUpperInvariant())
+            {
+                map.Name = CompetitiveMaps.Title(code);
+            }
+            db.MapPoolMaps.Add(new MapPoolMap { Id = Guid.NewGuid(), MapPoolId = pool.Id, GameMapId = map.Id, OrderIndex = order++ });
         }
         await db.SaveChangesAsync(ct);
     }
-} 
+}

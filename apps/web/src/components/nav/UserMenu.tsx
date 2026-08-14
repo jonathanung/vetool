@@ -6,32 +6,35 @@ import { useGetMyLobbyQuery } from '@/store/api/lobbiesApi'
 export default function UserMenu() {
   const { data: me, isLoading: meLoading } = useGetMeQuery()
   const { data: myLobby } = useGetMyLobbyQuery(undefined, {
-    skip: !me, // Only fetch lobby if user is authenticated
+    skip: !me,
   })
 
   if (meLoading) {
-    return <div className="size-8 rounded-full bg-gray-200 dark:bg-gray-800 animate-pulse" />
+    return <div className="size-8 rounded-full bg-bg-secondary animate-pulse" />
   }
 
   return me ? (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-2">
       {myLobby && (
-        <Link href={`/lobbies/${myLobby.id}`} className="text-xs underline">
+        <Link href={`/lobbies/${myLobby.id}`} className="bento-btn bento-btn-ghost text-sm px-3 py-2">
           My lobby
         </Link>
       )}
-      <Link href="/account" className="inline-flex items-center gap-2">
-        <img
-          src={me.avatarUrl || 'https://placehold.co/32x32'}
-          alt="Profile"
-          className="size-8 rounded-full"
-        />
-      </Link>
-      <Link href="/logout" className="text-xs underline">
+      <span className="hidden sm:inline text-sm text-text-secondary px-2">
+        {me.displayName || me.userName}
+      </span>
+      <Link href="/logout" className="bento-btn bento-btn-secondary text-sm px-3 py-2">
         Logout
       </Link>
     </div>
   ) : (
-    <Link href="/login">Login</Link>
+    <div className="flex items-center gap-2">
+      <Link href="/signup" className="bento-btn bento-btn-ghost text-sm px-3 py-2">
+        Sign up
+      </Link>
+      <Link href="/login" className="bento-btn bento-btn-primary text-sm px-3 py-2">
+        Login
+      </Link>
+    </div>
   )
 }

@@ -27,6 +27,7 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
   const [name, setName] = useState('My Lobby')
   const [game, setGame] = useState(defaultGame)
   const [isPublic, setIsPublic] = useState(true)
+  const [maxPlayers, setMaxPlayers] = useState(10)
   const [showModal, setShowModal] = useState(false)
 
   const { data: existingLobby, isLoading: checking } = useGetMyLobbyQuery()
@@ -49,7 +50,7 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
       const result = await createLobby({
         name,
         game: GAME_ENUM[game] ?? 0,
-        maxPlayers: 10,
+        maxPlayers,
         isPublic,
       }).unwrap()
 
@@ -168,6 +169,20 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
             >
               <option value="cs2">CS2</option>
               <option value="val">Valorant</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium text-text-secondary">Size</label>
+            <select
+              className="bento-input min-w-[120px]"
+              value={maxPlayers}
+              onChange={(e) => setMaxPlayers(Number(e.target.value))}
+            >
+              <option value={2}>1v1</option>
+              <option value={4}>2v2</option>
+              <option value={6}>3v3</option>
+              <option value={8}>4v4</option>
+              <option value={10}>5v5</option>
             </select>
           </div>
           <label className="flex items-center gap-2 text-sm cursor-pointer py-2">

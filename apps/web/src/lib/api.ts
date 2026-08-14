@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { API_BASE, JWT_COOKIE_NAME } from './config'
+import { getApiBase, JWT_COOKIE_NAME } from './config'
 
 export class ApiError extends Error {
   status: number
@@ -11,7 +11,7 @@ export class ApiError extends Error {
 
 // Client-side API request function
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBase()}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
@@ -52,7 +52,7 @@ export async function serverApiGet<T>(path: string): Promise<T> {
     headers['Cookie'] = `${JWT_COOKIE_NAME}=${token}`
   }
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBase()}${path}`, {
     method: 'GET',
     headers,
     cache: 'no-store',

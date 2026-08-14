@@ -120,6 +120,18 @@ export const lobbiesApi = baseApi.injectEndpoints({
         { type: 'Lobby', id },
       ],
     }),
+
+    startMatch: builder.mutation<any, { lobbyId: string; bestOf: number }>({
+      query: ({ lobbyId, bestOf }) => ({
+        url: `/lobbies/${lobbyId}/matches`,
+        method: 'POST',
+        body: { bestOf },
+      }),
+      invalidatesTags: (_result, _error, { lobbyId }) => [
+        { type: 'Lobby', id: lobbyId },
+        { type: 'Matches', id: 'LIST' },
+      ],
+    }),
   }),
 })
 
@@ -133,4 +145,5 @@ export const {
   useJoinLobbyMutation,
   useJoinAsGuestMutation,
   useLeaveLobbyMutation,
+  useStartMatchMutation,
 } = lobbiesApi

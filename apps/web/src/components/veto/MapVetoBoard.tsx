@@ -8,9 +8,11 @@ interface MapTile {
 }
 
 interface Props {
-  mode: 'bo3' | 'bo5' | 'direct'
+  mode: 'bo3' | 'bo5' | 'direct' | 'bo1'
   maps: MapTile[]
+  allMaps?: MapTile[]
   nextTeam: 'A' | 'B' | 'None'
+  nextAction?: 'ban' | 'pick' | null
   stepIndex: number
   onBan: (mapId: string) => void
   onPick: (mapId: string) => void
@@ -19,10 +21,16 @@ interface Props {
   bans?: string[]
 }
 
+function labelFor(id: string, maps: MapTile[], allMaps: MapTile[]) {
+  return allMaps.concat(maps).find((m) => m.id === id)?.name || id
+}
+
 export default function MapVetoBoard({
   mode,
   maps,
+  allMaps = [],
   nextTeam,
+  nextAction,
   stepIndex,
   onBan,
   onPick,
@@ -48,18 +56,23 @@ export default function MapVetoBoard({
     return () => clearInterval(interval)
   }, [countdownEndTime, stepIndex])
 
-  const isDirect = mode === 'direct'
-  const canAct = nextTeam !== 'None' && timeLeft > 0
+  const action = nextAction ?? (mode === 'direct' || mode === 'bo1' ? 'pick' : 'ban')
+  const canAct = nextTeam !== 'None' && timeLeft > 0 && Boolean(action)
   const seconds = Math.ceil(timeLeft / 1000)
   const isLowTime = seconds <= 10
+  const isPick = action === 'pick'
 
   return (
     <div className="space-y-6" role="region" aria-label="Map veto board">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="bento-badge bento-badge-primary">{mode.toUpperCase()}</span>
           <span className="text-sm text-text-muted">Step {stepIndex + 1}</span>
+          {action && (
+            <span className={`bento-badge ${isPick ? 'bento-badge-success' : 'bento-badge-danger'}`}>
+              {isPick ? 'Pick' : 'Ban'}
+            </span>
+          )}
         </div>
         <div
           className={`px-4 py-2 rounded-bento-sm font-medium ${
@@ -73,16 +86,11 @@ export default function MapVetoBoard({
           }`}
           aria-live="polite"
         >
-          {nextTeam === 'None' ? (
-            'Waiting...'
-          ) : (
-            <>Team {nextTeam} - {seconds}s</>
-          )}
+          {nextTeam === 'None' ? 'Waiting...' : <>Team {nextTeam} — {seconds}s</>}
         </div>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Available Maps */}
         <div className="lg:col-span-2 space-y-4">
           <h3 className="font-semibold">Available Maps</h3>
           <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3" role="listbox" aria-label="Available maps">
@@ -91,14 +99,14 @@ export default function MapVetoBoard({
                 <button
                   className={`w-full p-4 rounded-bento text-left transition-all border ${
                     canAct
-                      ? isDirect
+                      ? isPick
                         ? 'border-success/20 hover:border-success hover:bg-success-soft'
                         : 'border-danger/20 hover:border-danger hover:bg-danger-soft'
                       : 'border-border opacity-50 cursor-not-allowed'
                   }`}
                   role="option"
                   aria-label={`Map ${m.name}`}
-                  onClick={() => (isDirect ? onPick(m.id) : onBan(m.id))}
+                  onClick={() => (isPick ? onPick(m.id) : onBan(m.id))}
                   disabled={!canAct}
                 >
                   <span className="font-semibold block">{m.name}</span>
@@ -108,21 +116,20 @@ export default function MapVetoBoard({
             ))}
           </ul>
           <p className="text-xs text-text-muted">
-            {isDirect ? 'Click a map to pick it' : 'Click a map to ban it'}
+            {isPick ? 'Click a map to pick it' : 'Click a map to ban it'}
           </p>
         </div>
 
-        {/* Actions Panel */}
         <div className="space-y-6">
-          {/* Instructions */}
           <div className="bento-card p-4 space-y-2">
             <h3 className="font-semibold">Actions</h3>
             <p className="text-sm text-text-muted">
-              {isDirect ? 'Select the final map to play' : 'Ban maps to narrow down the pool'}
+              {mode === 'bo3' || mode === 'bo5'
+                ? 'Captains interleave bans and picks. The last remaining map is auto-picked.'
+                : 'Ban down to a single map, or pick it directly.'}
             </p>
           </div>
 
-          {/* Banned Maps */}
           {bans.length > 0 && (
             <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
@@ -131,18 +138,14 @@ export default function MapVetoBoard({
               </h4>
               <ul className="space-y-1.5">
                 {bans.map((mapId) => (
-                  <li
-                    key={mapId}
-                    className="px-3 py-2 rounded-bento-sm bg-danger-soft text-danger text-sm line-through"
-                  >
-                    {mapId}
+                  <li key={mapId} className="px-3 py-2 rounded-bento-sm bg-danger-soft text-danger text-sm line-through">
+                    {labelFor(mapId, maps, allMaps)}
                   </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Picked Maps */}
           {picks.length > 0 && (
             <div className="space-y-3">
               <h4 className="text-sm font-medium flex items-center gap-2">
@@ -151,11 +154,8 @@ export default function MapVetoBoard({
               </h4>
               <ul className="space-y-1.5">
                 {picks.map((mapId, idx) => (
-                  <li
-                    key={mapId}
-                    className="px-3 py-2 rounded-bento-sm bg-success-soft text-success text-sm font-medium"
-                  >
-                    Map {idx + 1}: {mapId}
+                  <li key={mapId} className="px-3 py-2 rounded-bento-sm bg-success-soft text-success text-sm font-medium">
+                    Map {idx + 1}: {labelFor(mapId, maps, allMaps)}
                   </li>
                 ))}
               </ul>

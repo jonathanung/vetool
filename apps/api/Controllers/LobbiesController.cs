@@ -1,15 +1,14 @@
 using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
-using System.IdentityModel.Tokens.Jwt;
-using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using VeTool.Api.Options;
+using VeTool.Api.Services.Auth;
+using VeTool.Api.Services.Matchmaking;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
 using VeTool.Domain.Enums;
@@ -22,15 +21,25 @@ public class LobbiesController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly UserManager<ApplicationUser> _userManager;
-    private readonly RsaSecurityKey _signingKey;
+    private readonly IJwtTokenService _jwt;
     private readonly JwtCookieOptions _cookieOptions;
+    private readonly LobbyMembershipService _membership;
+    private readonly MatchLifecycleService _matches;
 
-    public LobbiesController(AppDbContext db, UserManager<ApplicationUser> userManager, RsaSecurityKey signingKey, IOptions<JwtCookieOptions> cookieOptions)
+    public LobbiesController(
+        AppDbContext db,
+        UserManager<ApplicationUser> userManager,
+        IJwtTokenService jwt,
+        IOptions<JwtCookieOptions> cookieOptions,
+        LobbyMembershipService membership,
+        MatchLifecycleService matches)
     {
         _db = db;
         _userManager = userManager;
-        _signingKey = signingKey;
+        _jwt = jwt;
         _cookieOptions = cookieOptions.Value;
+        _membership = membership;
+        _matches = matches;
     }
 
     [HttpPost]
@@ -41,27 +50,33 @@ public class LobbiesController : ControllerBase
         var existing = await _db.Lobbies.FirstOrDefaultAsync(l => l.CreatedByUserId == userId && l.Status != LobbyStatus.Completed);
         if (existing is not null) return Conflict(new { message = "You already own a lobby." });
 
+        var maxPlayers = req.MaxPlayers ?? 10;
+        if (maxPlayers < 2 || maxPlayers > 10) return BadRequest(new { message = "Max players must be between 2 and 10." });
+
         var lobby = new Lobby
         {
             Id = Guid.NewGuid(),
             Game = req.Game,
-            Name = req.Name,
+            Name = string.IsNullOrWhiteSpace(req.Name) ? "Scrim" : req.Name.Trim(),
             CreatedByUserId = userId,
             Status = LobbyStatus.Open,
-            MaxPlayers = req.MaxPlayers ?? 10,
+            MaxPlayers = maxPlayers,
             Settings = JsonDocument.Parse($"{{\"isPublic\":{(req.IsPublic ? "true" : "false")}}}")
         };
         _db.Lobbies.Add(lobby);
         _db.LobbyMemberships.Add(new LobbyMembership { Id = Guid.NewGuid(), LobbyId = lobby.Id, UserId = userId, Role = LobbyRole.Owner });
         await _db.SaveChangesAsync();
-        return CreatedAtAction(nameof(Get), new { id = lobby.Id }, lobby);
+        return CreatedAtAction(nameof(Get), new { id = lobby.Id }, await ShapeLobby(lobby, userId));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id)
     {
         var lobby = await _db.Lobbies.AsNoTracking().FirstOrDefaultAsync(l => l.Id == id);
-        return lobby is null ? NotFound() : Ok(lobby);
+        if (lobby is null) return NotFound();
+        var userIdStr = User.Identity?.IsAuthenticated == true ? User.FindFirstValue(ClaimTypes.NameIdentifier) : null;
+        Guid? uid = Guid.TryParse(userIdStr, out var parsed) ? parsed : null;
+        return Ok(await ShapeLobby(lobby, uid));
     }
 
     [HttpGet]
@@ -69,76 +84,56 @@ public class LobbiesController : ControllerBase
     {
         var q = _db.Lobbies.AsNoTracking().AsQueryable();
 
-        // Parse game filter - accept string like "cs2", "val", "Cs2", "Val", "0", "1"
         if (!string.IsNullOrEmpty(game))
         {
             Game? parsedGame = game.ToLowerInvariant() switch
             {
                 "cs2" or "0" => Game.Cs2,
-                "val" or "1" => Game.Val,
+                "val" or "valorant" or "1" => Game.Val,
                 _ => Enum.TryParse<Game>(game, ignoreCase: true, out var g) ? g : null
             };
-            if (parsedGame.HasValue)
-            {
-                q = q.Where(l => l.Game == parsedGame.Value);
-            }
+            if (parsedGame.HasValue) q = q.Where(l => l.Game == parsedGame.Value);
         }
 
         if (status.HasValue) q = q.Where(l => l.Status == status);
 
-        // allow mine=true or mine=1
         var mineRequested = mine is not null && (mine.Equals("true", StringComparison.OrdinalIgnoreCase) || mine == "1");
-
         var userIdStr = User.Identity?.IsAuthenticated == true ? User.FindFirstValue(ClaimTypes.NameIdentifier) : null;
         if (mineRequested && userIdStr is null) return Unauthorized();
 
         Guid? uid = null;
-        if (userIdStr is not null && Guid.TryParse(userIdStr, out var parsed))
-        {
-            uid = parsed;
-        }
+        if (userIdStr is not null && Guid.TryParse(userIdStr, out var parsed)) uid = parsed;
 
         if (mineRequested && uid.HasValue)
         {
             q = q.Where(l => l.CreatedByUserId == uid.Value);
         }
 
-        // Fetch lobbies - we need to handle visibility filtering carefully
-        // to ensure user's own lobbies always appear regardless of ordering
         List<Lobby> list;
-
         if (uid.HasValue && !mineRequested)
         {
-            // Fetch user's own lobbies first (they should always appear)
-            var myLobbies = await q
-                .Where(l => l.CreatedByUserId == uid.Value)
-                .OrderByDescending(l => l.UpdatedAt)
-                .ToListAsync();
-
-            // Fetch other public lobbies
-            var otherLobbies = await q
-                .Where(l => l.CreatedByUserId != uid.Value)
-                .OrderByDescending(l => l.UpdatedAt)
-                .Take(50)
-                .ToListAsync();
-
-            // Filter other lobbies to only public ones
+            var myLobbies = await q.Where(l => l.CreatedByUserId == uid.Value).OrderByDescending(l => l.UpdatedAt).ToListAsync();
+            var otherLobbies = await q.Where(l => l.CreatedByUserId != uid.Value).OrderByDescending(l => l.UpdatedAt).Take(50).ToListAsync();
             otherLobbies = otherLobbies.Where(IsPublic).ToList();
-
-            // Merge: user's lobbies first, then others
             list = myLobbies.Concat(otherLobbies).ToList();
         }
         else if (uid is null)
         {
-            // Anonymous user - only show public lobbies
             var allLobbies = await q.OrderByDescending(l => l.UpdatedAt).Take(100).ToListAsync();
             list = allLobbies.Where(IsPublic).Take(50).ToList();
         }
         else
         {
-            // mine=true requested, already filtered by user
             list = await q.OrderByDescending(l => l.UpdatedAt).Take(50).ToListAsync();
         }
+
+        var ids = list.Select(l => l.Id).ToList();
+        var counts = await _db.LobbyMemberships.AsNoTracking()
+            .Where(m => ids.Contains(m.LobbyId) && m.LeftAt == null)
+            .GroupBy(m => m.LobbyId)
+            .Select(g => new { LobbyId = g.Key, Count = g.Count() })
+            .ToListAsync();
+        var countById = counts.ToDictionary(c => c.LobbyId, c => c.Count);
 
         var shaped = list.Select(l => new
         {
@@ -148,6 +143,7 @@ public class LobbiesController : ControllerBase
             l.Status,
             l.CreatedByUserId,
             l.MaxPlayers,
+            MemberCount = countById.GetValueOrDefault(l.Id),
             IsPublic = IsPublic(l),
             IsMine = uid.HasValue && l.CreatedByUserId == uid.Value
         });
@@ -158,18 +154,17 @@ public class LobbiesController : ControllerBase
     [HttpGet("{id:guid}/members")]
     public async Task<IActionResult> Members(Guid id)
     {
-        var members = await _db.LobbyMemberships.AsNoTracking()
-            .Where(m => m.LobbyId == id)
-            .Join(_db.Users, m => m.UserId, u => u.Id, (m, u) => new
-            {
-                m.UserId,
-                u.UserName,
-                u.DisplayName,
-                m.Role,
-                m.Team
-            })
-            .ToListAsync();
-        return Ok(members);
+        var exists = await _db.Lobbies.AsNoTracking().AnyAsync(l => l.Id == id);
+        if (!exists) return NotFound();
+        var members = await _membership.GetMembersAsync(id);
+        return Ok(members.Select(m => new
+        {
+            userId = m.UserId,
+            userName = m.UserName,
+            displayName = m.DisplayName,
+            role = m.Role.ToString(),
+            team = LobbyMembershipService.TeamLabel(m.Team)
+        }));
     }
 
     [Authorize]
@@ -177,23 +172,100 @@ public class LobbiesController : ControllerBase
     public async Task<IActionResult> Join(Guid id)
     {
         var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var exists = await _db.LobbyMemberships.AnyAsync(m => m.LobbyId == id && m.UserId == userId);
-        if (exists) return Ok(new { joined = true });
+        var outcome = await _membership.TryJoinAsync(id, userId);
+        return outcome switch
+        {
+            JoinOutcome.NotFound => NotFound(new { message = "Lobby not found." }),
+            JoinOutcome.Full => Conflict(new { message = "Lobby is full." }),
+            JoinOutcome.AlreadyMember => Ok(new { joined = true, alreadyMember = true }),
+            _ => Ok(new { joined = true })
+        };
+    }
 
+    [AllowAnonymous]
+    [HttpPost("{id:guid}/guest")]
+    public async Task<IActionResult> Guest(Guid id)
+    {
+        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id);
+        if (lobby is null) return NotFound(new { message = "Lobby not found." });
+
+        var count = await _db.LobbyMemberships.CountAsync(m => m.LobbyId == id && m.LeftAt == null);
+        if (count >= lobby.MaxPlayers) return Conflict(new { message = "Lobby is full." });
+
+        var (user, _) = await CreateGuestUserAsync();
+        var outcome = await _membership.TryJoinAsync(id, user.Id);
+        if (outcome == JoinOutcome.Full) return Conflict(new { message = "Lobby is full." });
+        if (outcome == JoinOutcome.NotFound) return NotFound(new { message = "Lobby not found." });
+
+        AppendJwtCookie(_jwt.CreateToken(user), DateTimeOffset.UtcNow.AddDays(1));
+        return Ok(new { userId = user.Id, username = user.UserName, displayName = user.DisplayName, guest = true });
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/leave")]
+    public async Task<IActionResult> Leave(Guid id)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var left = await _membership.LeaveAsync(id, userId);
+        return left ? Ok(new { left = true }) : NotFound();
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/matches")]
+    public async Task<IActionResult> StartMatch(Guid id, [FromBody] StartMatchRequest? req)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var bestOf = req?.BestOf switch
+        {
+            3 => BestOf.Bo3,
+            5 => BestOf.Bo5,
+            _ => BestOf.Bo1
+        };
         try
         {
-            _db.LobbyMemberships.Add(new LobbyMembership { Id = Guid.NewGuid(), LobbyId = id, UserId = userId, Role = LobbyRole.Member });
-            await _db.SaveChangesAsync();
-            return Ok(new { joined = true });
+            var match = await _matches.StartFromLobbyAsync(id, userId, bestOf);
+            if (match is null) return NotFound(new { message = "Lobby not found." });
+            var summary = await _matches.GetSummaryAsync(match.Id);
+            return Ok(summary);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException p && p.SqlState == PostgresErrorCodes.UniqueViolation)
+        catch (UnauthorizedAccessException)
         {
-            // Idempotent: membership already exists due to concurrent join requests
-            return Ok(new { joined = true, duplicate = true });
+            return Forbid();
         }
     }
 
-    private static readonly string[] GuestWords = new[]
+    [Authorize]
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id && l.CreatedByUserId == userId);
+        if (lobby is null) return NotFound();
+        _db.Lobbies.Remove(lobby);
+        await _db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    private async Task<object> ShapeLobby(Lobby lobby, Guid? uid)
+    {
+        var memberCount = await _db.LobbyMemberships.CountAsync(m => m.LobbyId == lobby.Id && m.LeftAt == null);
+        var matchId = await _matches.CurrentMatchIdAsync(lobby.Id);
+        return new
+        {
+            lobby.Id,
+            lobby.Name,
+            lobby.Game,
+            lobby.Status,
+            lobby.CreatedByUserId,
+            lobby.MaxPlayers,
+            MemberCount = memberCount,
+            CurrentMatchId = matchId,
+            IsPublic = IsPublic(lobby),
+            IsMine = uid.HasValue && lobby.CreatedByUserId == uid.Value
+        };
+    }
+
+    private static readonly string[] GuestWords =
     {
         "alpha","bravo","charlie","delta","echo","foxtrot","golf","hotel","india","juliet","kilo","lima","mike","november","oscar","papa","quebec","romeo","sierra","tango","uniform","victor","whiskey","xray","yankee","zulu",
         "red","blue","green","yellow","orange","purple","silver","gold","scarlet","crimson","azure","indigo","violet","cyan",
@@ -232,58 +304,20 @@ public class LobbiesController : ControllerBase
             };
             var password = $"Guest!{Guid.NewGuid():N}";
             var result = await _userManager.CreateAsync(user, password);
-            if (result.Succeeded)
-            {
-                return (user, password);
-            }
+            if (result.Succeeded) return (user, password);
         }
         throw new Exception("Failed to create guest user after retries");
     }
 
-    private string CreateJwt(ApplicationUser user)
+    private void AppendJwtCookie(string token, DateTimeOffset expires)
     {
-        var handler = new JwtSecurityTokenHandler();
-        var descriptor = new SecurityTokenDescriptor
-        {
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty)
-            }),
-            Expires = DateTime.UtcNow.AddHours(8),
-            SigningCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256)
-        };
-        var token = handler.CreateToken(descriptor);
-        return handler.WriteToken(token);
-    }
-
-    [AllowAnonymous]
-    [HttpPost("{id:guid}/guest")]
-    public async Task<IActionResult> Guest(Guid id)
-    {
-        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id);
-        if (lobby is null) return NotFound();
-
-        var (user, _) = await CreateGuestUserAsync();
-
-        var membership = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == id && m.UserId == user.Id);
-        if (membership is null)
-        {
-            _db.LobbyMemberships.Add(new LobbyMembership { Id = Guid.NewGuid(), LobbyId = id, UserId = user.Id, Role = LobbyRole.Member });
-            await _db.SaveChangesAsync();
-        }
-
-        var token = CreateJwt(user);
         var forwardedProto = Request.Headers["X-Forwarded-Proto"].ToString();
         var isHttps = Request.IsHttps || string.Equals(forwardedProto, "https", StringComparison.OrdinalIgnoreCase);
-        string? cookieDomain = string.IsNullOrWhiteSpace(_cookieOptions.Domain) ? null : _cookieOptions.Domain?.Trim();
-        if (!string.IsNullOrEmpty(cookieDomain))
+        string? cookieDomain = string.IsNullOrWhiteSpace(_cookieOptions.Domain) ? null : _cookieOptions.Domain.Trim();
+        if (!string.IsNullOrEmpty(cookieDomain) &&
+            (cookieDomain.Contains('/') || cookieDomain.Contains(':') || cookieDomain.Equals("localhost", StringComparison.OrdinalIgnoreCase)))
         {
-            if (cookieDomain.Contains('/') || cookieDomain.Contains(':') || cookieDomain.Equals("localhost", StringComparison.OrdinalIgnoreCase))
-            {
-                cookieDomain = null;
-            }
+            cookieDomain = null;
         }
         Response.Cookies.Append(_cookieOptions.CookieName, token, new CookieOptions
         {
@@ -292,34 +326,9 @@ public class LobbiesController : ControllerBase
             Secure = isHttps,
             Domain = cookieDomain,
             Path = "/",
-            Expires = DateTimeOffset.UtcNow.AddDays(1),
+            Expires = expires,
             IsEssential = true
         });
-        return Ok(new { userId = user.Id, username = user.UserName, displayName = user.DisplayName, guest = true });
-    }
-
-    [Authorize]
-    [HttpPost("{id:guid}/leave")]
-    public async Task<IActionResult> Leave(Guid id)
-    {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var membership = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == id && m.UserId == userId);
-        if (membership is null) return NotFound();
-        _db.LobbyMemberships.Remove(membership);
-        await _db.SaveChangesAsync();
-        return Ok();
-    }
-
-    [Authorize]
-    [HttpDelete("{id:guid}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id && l.CreatedByUserId == userId);
-        if (lobby is null) return NotFound();
-        _db.Lobbies.Remove(lobby);
-        await _db.SaveChangesAsync();
-        return NoContent();
     }
 
     private static bool IsPublic(Lobby lobby)
@@ -327,8 +336,7 @@ public class LobbiesController : ControllerBase
         try
         {
             if (lobby.Settings is null) return true;
-            using var doc = lobby.Settings;
-            if (doc.RootElement.TryGetProperty("isPublic", out var prop))
+            if (lobby.Settings.RootElement.TryGetProperty("isPublic", out var prop))
             {
                 return prop.GetBoolean();
             }
@@ -342,3 +350,4 @@ public class LobbiesController : ControllerBase
 }
 
 public record CreateLobbyRequest(Game Game, string Name, int? MaxPlayers, bool IsPublic);
+public record StartMatchRequest(int BestOf);

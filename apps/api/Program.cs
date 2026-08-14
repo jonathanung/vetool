@@ -1,6 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -10,8 +8,9 @@ using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using StackExchange.Redis;
 using VeTool.Api.Options;
-using VeTool.Api.Seeds;
+using VeTool.Api.Services.Auth;
 using VeTool.Api.Services.External;
+using VeTool.Api.Services.Matchmaking;
 using VeTool.Api.Services.Realtime;
 using VeTool.Domain.Data;
 using VeTool.Domain.Entities;
@@ -21,11 +20,11 @@ var builder = WebApplication.CreateBuilder(args);
 Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
 builder.Host.UseSerilog();
 
-// Load .env if present
 try { Env.Load(); } catch { }
 
 var configuration = builder.Configuration;
 var services = builder.Services;
+var isTesting = builder.Environment.IsEnvironment("Testing");
 
 string BuildPgConnectionFromPieces()
 {
@@ -72,14 +71,12 @@ services.AddIdentity<ApplicationUser, IdentityRole<Guid>>(options =>
 .AddDefaultTokenProviders();
 
 services.AddDataProtection();
-
-// HTTP clients for external providers
 services.AddHttpClient();
 
-// JWT (RS256) in httpOnly cookie
-var rsa = RSA.Create();
-var signingKey = new RsaSecurityKey(rsa) { KeyId = Guid.NewGuid().ToString("N") };
-services.AddSingleton(signingKey);
+var signing = JwtSigning.Create(configuration);
+services.AddSingleton(signing);
+services.AddSingleton<IJwtTokenService, JwtTokenService>();
+
 services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -92,7 +89,7 @@ services.AddAuthentication(options =>
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = signingKey,
+            IssuerSigningKey = signing.Key,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2)
         };
@@ -104,6 +101,12 @@ services.AddAuthentication(options =>
                 if (!string.IsNullOrEmpty(token))
                 {
                     context.Token = token;
+                }
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
                 }
                 return Task.CompletedTask;
             }
@@ -118,38 +121,65 @@ services.AddAuthorization(options =>
 services.AddEndpointsApiExplorer();
 services.AddSwaggerGen();
 
-services.AddHealthChecks().AddNpgSql(connectionString);
+if (!isTesting)
+{
+    services.AddHealthChecks().AddNpgSql(connectionString);
+    services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConn));
+    services.AddSignalR().AddStackExchangeRedis(redisConn);
+    services.AddSingleton<ISequenceGenerator, RedisSequenceGenerator>();
+    services.AddSingleton<IIdempotencyService, RedisIdempotencyService>();
+}
+else
+{
+    services.AddHealthChecks();
+    services.AddSignalR();
+    services.AddSingleton<ISequenceGenerator, InMemorySequenceGenerator>();
+    services.AddSingleton<IIdempotencyService, InMemoryIdempotencyService>();
+}
 
-services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConn));
-services.AddSignalR().AddStackExchangeRedis(redisConn);
-
-// realtime services
-services.AddSingleton<ISequenceGenerator, RedisSequenceGenerator>();
-services.AddSingleton<IIdempotencyService, RedisIdempotencyService>();
 services.AddSingleton<ICaptainPicker, CaptainPicker>();
+services.AddScoped<LobbyMembershipService>();
+services.AddScoped<VetoSessionService>();
+services.AddScoped<MatchLifecycleService>();
 
-// external providers
 services.AddSingleton<ICs2PoolProvider, Cs2PoolProvider>();
 services.AddSingleton<IValPoolProvider, ValPoolProvider>();
 services.AddScoped<IRiotStatsProvider, RiotStatsProvider>();
 services.AddSingleton<ISteamAvatarService, SteamAvatarService>();
 
+var defaultOrigins = new[]
+{
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001"
+};
+var extraOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
+    ?? Environment.GetEnvironmentVariable("PUBLIC_WEB_ORIGIN")
+    ?? configuration["Cors:Origins"]
+    ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+var origins = defaultOrigins.Concat(extraOrigins).Where(o => Uri.TryCreate(o, UriKind.Absolute, out _)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
 services.AddCors(options =>
 {
     options.AddPolicy("default", p => p
-        .WithOrigins(
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3000",
-            "http://127.0.0.1:3001"
-        )
+        .SetIsOriginAllowed(origin =>
+        {
+            if (string.IsNullOrWhiteSpace(origin)) return false;
+            if (origins.Contains(origin, StringComparer.OrdinalIgnoreCase)) return true;
+            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri)) return false;
+            return uri.Port is 3000 or 3001 or 80 or 443;
+        })
         .AllowAnyHeader()
         .AllowAnyMethod()
-        .AllowCredentials()
-        .SetIsOriginAllowedToAllowWildcardSubdomains());
+        .AllowCredentials());
 });
 
-services.AddControllers().AddNewtonsoftJson();
+services.AddControllers().AddNewtonsoftJson(options =>
+{
+    options.SerializerSettings.ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver();
+});
 
 var app = builder.Build();
 
@@ -161,7 +191,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Trust X-Forwarded-* headers when behind proxy (needed for correct HTTPS detection)
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor
@@ -178,8 +207,7 @@ app.MapGet("/api/v1/health", () => Results.Ok(new { status = "ok" }));
 app.MapHub<VeTool.Api.Realtime.LobbyHub>("/hubs/lobby");
 app.MapHub<VeTool.Api.Realtime.VetoHub>("/hubs/veto");
 
-// Skip database seeding in Testing environment
-if (!app.Environment.IsEnvironment("Testing"))
+if (!isTesting)
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();

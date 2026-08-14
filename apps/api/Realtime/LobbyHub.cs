@@ -1,12 +1,9 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using VeTool.Api.Contracts;
+using VeTool.Api.Services.Matchmaking;
 using VeTool.Api.Services.Realtime;
-using VeTool.Domain.Data;
-using VeTool.Domain.Entities;
 using VeTool.Domain.Enums;
 
 namespace VeTool.Api.Realtime;
@@ -15,15 +12,15 @@ namespace VeTool.Api.Realtime;
 public class LobbyHub : Hub
 {
     private static readonly ConcurrentDictionary<string, HashSet<Guid>> ConnectionLobbies = new();
-    private readonly AppDbContext _db;
     private readonly ISequenceGenerator _seq;
     private readonly IIdempotencyService _idem;
+    private readonly LobbyMembershipService _membership;
 
-    public LobbyHub(AppDbContext db, ISequenceGenerator seq, IIdempotencyService idem)
+    public LobbyHub(ISequenceGenerator seq, IIdempotencyService idem, LobbyMembershipService membership)
     {
-        _db = db;
         _seq = seq;
         _idem = idem;
+        _membership = membership;
     }
 
     private static string GroupFor(Guid lobbyId) => $"lobby:{lobbyId}";
@@ -33,9 +30,17 @@ public class LobbyHub : Hub
         await Groups.AddToGroupAsync(Context.ConnectionId, GroupFor(lobbyId));
         var set = ConnectionLobbies.GetOrAdd(Context.ConnectionId, _ => new HashSet<Guid>());
         lock (set) { set.Add(lobbyId); }
+
+        if (TryUserId(out var userId))
+        {
+            await _membership.TryJoinAsync(lobbyId, userId);
+        }
+
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
-        var payload = new UserJoinedEvent(lobbyId, Guid.Parse(Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value ?? Guid.Empty.ToString()));
-        await Clients.Group(GroupFor(lobbyId)).SendAsync("UserJoined", new RealtimeEnvelope("UserJoined", seq, DateTime.UtcNow, payload));
+        var snapshot = await _membership.GetRosterSnapshotAsync(lobbyId);
+        await Clients.Caller.SendAsync("LobbySnapshot", new RealtimeEnvelope("LobbySnapshot", seq, DateTime.UtcNow, ShapeSnapshot(lobbyId, snapshot)));
+        var payload = new UserJoinedEvent(lobbyId, userId);
+        await Clients.OthersInGroup(GroupFor(lobbyId)).SendAsync("UserJoined", new RealtimeEnvelope("UserJoined", seq, DateTime.UtcNow, payload));
     }
 
     public async Task LeaveLobby(Guid lobbyId)
@@ -45,43 +50,48 @@ public class LobbyHub : Hub
         {
             lock (set) { set.Remove(lobbyId); }
         }
-        var seq = await _seq.NextLobbySequenceAsync(lobbyId);
-        var payload = new UserLeftEvent(lobbyId, Guid.Parse(Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value ?? Guid.Empty.ToString()));
-        await Clients.Group(GroupFor(lobbyId)).SendAsync("UserLeft", new RealtimeEnvelope("UserLeft", seq, DateTime.UtcNow, payload));
     }
 
     public async Task SetCaptains(Guid lobbyId, Guid teamAUserId, Guid teamBUserId, string clientRequestId)
     {
         if (!await _idem.TryBeginAsync($"lobby:{lobbyId}:captains", clientRequestId, TimeSpan.FromMinutes(2))) return;
-        var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == lobbyId);
-        if (lobby is null) { await EmitError(lobbyId, "not_found", "Lobby not found"); return; }
-        var a = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == teamAUserId);
-        var b = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == teamBUserId);
-        if (a is null || b is null) { await EmitError(lobbyId, "invalid_captain", "Captain must be in lobby"); return; }
-        a.Role = LobbyRole.Captain; a.Team = TeamSide.A;
-        b.Role = LobbyRole.Captain; b.Team = TeamSide.B;
-        await _db.SaveChangesAsync();
+        var snapshot = await _membership.SetCaptainsAsync(lobbyId, teamAUserId, teamBUserId);
+        if (snapshot is null)
+        {
+            await EmitError(lobbyId, "invalid_captain", "Captain must be in lobby");
+            return;
+        }
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
-        var payload = new CaptainsSetEvent(lobbyId, teamAUserId, teamBUserId);
-        await Clients.Group(GroupFor(lobbyId)).SendAsync("CaptainsSet", new RealtimeEnvelope("CaptainsSet", seq, DateTime.UtcNow, payload));
+        await Clients.Group(GroupFor(lobbyId)).SendAsync("CaptainsSet", new RealtimeEnvelope("CaptainsSet", seq, DateTime.UtcNow, new
+        {
+            lobbyId,
+            teamAUserId,
+            teamBUserId,
+            captainA = teamAUserId,
+            captainB = teamBUserId,
+            teamA = snapshot.TeamA,
+            teamB = snapshot.TeamB
+        }));
+        await Clients.Group(GroupFor(lobbyId)).SendAsync("LobbySnapshot", new RealtimeEnvelope("LobbySnapshot", seq, DateTime.UtcNow, ShapeSnapshot(lobbyId, snapshot)));
     }
 
     public async Task UpdateTeams(Guid lobbyId, List<Guid> teamA, List<Guid> teamB, string clientRequestId)
     {
         if (!await _idem.TryBeginAsync($"lobby:{lobbyId}:teams", clientRequestId, TimeSpan.FromMinutes(2))) return;
-        var members = await _db.LobbyMemberships.Where(m => m.LobbyId == lobbyId).ToListAsync();
-        var setA = new HashSet<Guid>(teamA);
-        var setB = new HashSet<Guid>(teamB);
-        foreach (var m in members)
+        var snapshot = await _membership.AssignTeamsAsync(lobbyId, teamA, teamB);
+        if (snapshot is null)
         {
-            if (setA.Contains(m.UserId)) m.Team = TeamSide.A;
-            else if (setB.Contains(m.UserId)) m.Team = TeamSide.B;
-            else m.Team = TeamSide.Unassigned;
+            await EmitError(lobbyId, "not_found", "Lobby not found");
+            return;
         }
-        await _db.SaveChangesAsync();
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
-        var payload = new TeamsUpdatedEvent(lobbyId, teamA, teamB);
-        await Clients.Group(GroupFor(lobbyId)).SendAsync("TeamsUpdated", new RealtimeEnvelope("TeamsUpdated", seq, DateTime.UtcNow, payload));
+        await Clients.Group(GroupFor(lobbyId)).SendAsync("TeamsUpdated", new RealtimeEnvelope("TeamsUpdated", seq, DateTime.UtcNow, new
+        {
+            lobbyId,
+            teamA = snapshot.TeamA,
+            teamB = snapshot.TeamB
+        }));
+        await Clients.Group(GroupFor(lobbyId)).SendAsync("LobbySnapshot", new RealtimeEnvelope("LobbySnapshot", seq, DateTime.UtcNow, ShapeSnapshot(lobbyId, snapshot)));
     }
 
     public Task Heartbeat(Guid lobbyId) => Clients.Caller.SendAsync("Pong", new { lobbyId, ts = DateTime.UtcNow });
@@ -91,39 +101,45 @@ public class LobbyHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var userIdStr = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
-        if (userIdStr is null || !Guid.TryParse(userIdStr, out var userId))
-        {
-            await base.OnDisconnectedAsync(exception);
-            return;
-        }
-
+        TryUserId(out var userId);
         if (!ConnectionLobbies.TryRemove(Context.ConnectionId, out var lobbies) || lobbies.Count == 0)
         {
             await base.OnDisconnectedAsync(exception);
             return;
         }
 
-        var toSave = false;
         foreach (var lobbyId in lobbies)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupFor(lobbyId));
-            var membership = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == userId);
-            if (membership is not null)
+            if (userId != Guid.Empty)
             {
-                _db.LobbyMemberships.Remove(membership);
-                toSave = true;
+                await _membership.OnHubDisconnectedAsync(lobbyId, userId);
             }
-            var seq = await _seq.NextLobbySequenceAsync(lobbyId);
-            var payload = new UserLeftEvent(lobbyId, userId);
-            await Clients.Group(GroupFor(lobbyId)).SendAsync("UserLeft", new RealtimeEnvelope("UserLeft", seq, DateTime.UtcNow, payload));
-        }
-
-        if (toSave)
-        {
-            await _db.SaveChangesAsync();
         }
 
         await base.OnDisconnectedAsync(exception);
     }
-} 
+
+    private bool TryUserId(out Guid userId)
+    {
+        var userIdStr = Context.UserIdentifier ?? Context.User?.FindFirst("sub")?.Value;
+        return Guid.TryParse(userIdStr, out userId);
+    }
+
+    private static object ShapeSnapshot(Guid lobbyId, LobbyRosterSnapshot snapshot) => new
+    {
+        lobbyId,
+        captainA = snapshot.CaptainA,
+        captainB = snapshot.CaptainB,
+        teamA = snapshot.TeamA,
+        teamB = snapshot.TeamB,
+        members = snapshot.Members.Select(m => new
+        {
+            userId = m.UserId,
+            userName = m.UserName,
+            displayName = m.DisplayName,
+            role = m.Role.ToString(),
+            team = LobbyMembershipService.TeamLabel(m.Team)
+        })
+    };
+}

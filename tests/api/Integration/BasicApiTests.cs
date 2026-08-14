@@ -1,6 +1,5 @@
-using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using VeTool.Api.Controllers;
 
 namespace VeTool.Tests.Integration;
 
@@ -9,7 +8,7 @@ public class BasicApiTests : IClassFixture<WebApplicationFactory<Program>>
     private readonly WebApplicationFactory<Program> _factory;
     public BasicApiTests(WebApplicationFactory<Program> factory)
     {
-        _factory = factory.WithWebHostBuilder(_ => { });
+        _factory = factory.WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
     }
 
     [Fact]

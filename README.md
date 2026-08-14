@@ -18,9 +18,12 @@ docker compose down
 ```
 
 **Access the application:**
-- Web: http://localhost:3000
+- Web (published on all interfaces): http://localhost:3000 or `http://<this-host>:3000` from another machine
 - API: http://localhost:5001
 - API Health: http://localhost:5001/health
+- Demo login: `demo` / `DemoPass123!`
+
+The browser talks to the web origin only (`/api/v1` and `/hubs`). Next.js proxies those to the API, so a Mac opening this host does not fetch `localhost` on the Mac.
 
 ## Prerequisites
 
@@ -47,8 +50,10 @@ cp .env.example .env
 Key environment variables:
 - `POSTGRES_*`: Database connection settings
 - `REDIS_CONNECTION`: Redis connection string
-- `JWT__Secret`: JWT signing secret (change in production!)
-- `NEXT_PUBLIC_API_BASE`: API endpoint for web app
+- `JWT__Secret`: JWT signing secret (must be set so sessions survive API restarts)
+- `CORS_ORIGINS`: comma-separated browser origins (required for a non-localhost web host)
+- `NEXT_PUBLIC_API_BASE`: browser-facing API URL (compose uses `http://localhost:5001/api/v1`)
+- `API_BASE_INTERNAL`: server-side API URL inside Docker (`http://api:8080/api/v1`)
 
 ### Docker Services
 
@@ -87,12 +92,13 @@ docker compose exec api dotnet ef database update
 #### Database Setup
 
 ```bash
-# Start PostgreSQL (via Docker for convenience)
+# Start PostgreSQL (via Docker for convenience). Compose publishes 5433 on the host
+# so it does not collide with another local Postgres on 5432.
 docker run -d --name vetool-postgres \
   -e POSTGRES_DB=vetool \
   -e POSTGRES_USER=vetool \
   -e POSTGRES_PASSWORD=vetool_dev_password \
-  -p 5432:5432 \
+  -p 5433:5432 \
   postgres:16-alpine
 
 # Start Redis
@@ -143,6 +149,9 @@ docker compose exec api dotnet test
 
 ### Port 5000 Already in Use
 macOS uses port 5000 for AirPlay Receiver. The Docker setup uses port 5001 instead. If you need to change it, update `docker-compose.yml` and `.env.example`.
+
+### Port 5432 Already in Use
+Compose publishes Postgres on host port **5433** (container still 5432) so it can start next to another local Postgres. The API container talks to `postgres:5432` on the compose network. For `dotnet run` against compose Postgres, set `POSTGRES_PORT=5433`.
 
 ### Database Connection Failed
 Ensure PostgreSQL is running and connection settings are correct:

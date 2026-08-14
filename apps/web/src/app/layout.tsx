@@ -12,7 +12,7 @@ const UserMenu = dynamic(() => import('@/components/nav/UserMenu'), { ssr: false
 
 export const metadata: Metadata = {
   title: 'VeTool',
-  description: 'Scrim organizer for CS2 and VAL',
+  description: 'Organize CS2 and VALORANT custom games — lobbies, draft, map veto, join codes.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -48,7 +48,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               </main>
               <footer className="border-t border-border py-6">
                 <div className="container mx-auto px-4 text-center text-sm text-text-muted">
-                  VeTool - Organize your scrims
+                  VeTool — CS2 & VALORANT custom games
                 </div>
               </footer>
             </div>

@@ -1,6 +1,17 @@
 import { serverApiGet } from '@/lib/api'
 
-export type Lobby = { id: string; name: string; game: string; status: string }
+export type Lobby = {
+  id: string
+  name: string
+  game: string
+  status: string
+  maxPlayers?: number
+  memberCount?: number
+  currentMatchId?: string | null
+  createdByUserId?: string
+  isPublic?: boolean
+  isMine?: boolean
+}
 export type LobbyMember = { userId: string; userName: string; displayName: string; role: string; team: string }
 
 export async function getLobby(id: string): Promise<Lobby> {

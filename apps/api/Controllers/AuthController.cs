@@ -1,12 +1,11 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 using VeTool.Api.Options;
+using VeTool.Api.Services.Auth;
 using VeTool.Domain.Entities;
 
 namespace VeTool.Api.Controllers;
@@ -17,15 +16,15 @@ public class AuthController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
-    private readonly RsaSecurityKey _signingKey;
+    private readonly IJwtTokenService _jwt;
     private readonly JwtCookieOptions _cookieOptions;
     private readonly AuthOptions _authOptions;
 
-    public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, RsaSecurityKey signingKey, IOptions<JwtCookieOptions> cookieOptions, IOptions<AuthOptions> authOptions)
+    public AuthController(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager, IJwtTokenService jwt, IOptions<JwtCookieOptions> cookieOptions, IOptions<AuthOptions> authOptions)
     {
         _userManager = userManager;
         _signInManager = signInManager;
-        _signingKey = signingKey;
+        _jwt = jwt;
         _cookieOptions = cookieOptions.Value;
         _authOptions = authOptions.Value;
     }
@@ -82,7 +81,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Guest()
     {
         var (user, _) = await CreateGuestUserAsync();
-        var token = CreateJwt(user);
+        var token = _jwt.CreateToken(user);
         var forwardedProto = Request.Headers["X-Forwarded-Proto"].ToString();
         var isHttps = Request.IsHttps || string.Equals(forwardedProto, "https", StringComparison.OrdinalIgnoreCase);
         string? cookieDomain = string.IsNullOrWhiteSpace(_cookieOptions.Domain) ? null : _cookieOptions.Domain?.Trim();
@@ -132,7 +131,7 @@ public class AuthController : ControllerBase
         if (!passwordValid) return Unauthorized();
         if (_authOptions.RequireEmailConfirmation && !user.EmailConfirmed) return Forbid();
 
-        var token = CreateJwt(user);
+        var token = _jwt.CreateToken(user);
 
         // Determine if request is effectively HTTPS (consider reverse proxies)
         var forwardedProto = Request.Headers["X-Forwarded-Proto"].ToString();
@@ -208,24 +207,8 @@ public class AuthController : ControllerBase
         return Ok(new { id = user.Id, userName = user.UserName, displayName = user.DisplayName, email = user.Email, avatarUrl = user.AvatarUrl });
     }
 
-    private string CreateJwt(ApplicationUser user)
-    {
-        var handler = new JwtSecurityTokenHandler();
-        var descriptor = new SecurityTokenDescriptor
-        {
-            Subject = new ClaimsIdentity(new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.UserName ?? string.Empty)
-            }),
-            Expires = DateTime.UtcNow.AddHours(8),
-            SigningCredentials = new SigningCredentials(_signingKey, SecurityAlgorithms.RsaSha256)
-        };
-        var token = handler.CreateToken(descriptor);
-        return handler.WriteToken(token);
-    }
 }
+
 
 public record RegisterRequest(string Email, string Username, string Password, string? DisplayName);
 public record LoginRequest(string UsernameOrEmail, string Password);

@@ -24,6 +24,7 @@ interface MatchState {
   error: string | null
   isComplete: boolean
   countdownEndTime: number | null // Unix timestamp when countdown ends
+  nextAction: 'ban' | 'pick' | null
 }
 
 const initialState: MatchState = {
@@ -40,6 +41,7 @@ const initialState: MatchState = {
   error: null,
   isComplete: false,
   countdownEndTime: null,
+  nextAction: null,
 }
 
 export const matchSlice = createSlice({
@@ -92,13 +94,28 @@ export const matchSlice = createSlice({
     vetoSessionStarted: (state, action: PayloadAction<{
       seq: number
       available: string[]
+      picks?: string[]
+      bans?: string[]
+      stepIndex?: number
+      team?: NextTeam
+      complete?: boolean
+      nextAction?: 'ban' | 'pick' | null
       countdownMs?: number
     }>) => {
       state.seq = action.payload.seq
-      // Map available IDs to full MapTile objects
       state.availableMaps = action.payload.available
         .map(id => state.allMaps.find(m => m.id === id))
         .filter((m): m is MapTile => m !== undefined)
+      if (action.payload.picks) state.picks = action.payload.picks
+      if (action.payload.bans) state.bans = action.payload.bans
+      if (typeof action.payload.stepIndex === 'number') state.stepIndex = action.payload.stepIndex
+      if (action.payload.team) state.nextTeam = action.payload.team
+      if (action.payload.nextAction !== undefined) state.nextAction = action.payload.nextAction
+      if (action.payload.complete) {
+        state.isComplete = true
+        state.nextTeam = 'None'
+        state.nextAction = null
+      }
       if (action.payload.countdownMs) {
         state.countdownEndTime = Date.now() + action.payload.countdownMs
       }
@@ -111,6 +128,7 @@ export const matchSlice = createSlice({
       picks?: string[]
       bans?: string[]
       available?: string[]
+      nextAction?: 'ban' | 'pick' | null
       countdownMs?: number
     }>) => {
       if (action.payload.seq <= state.seq) return
@@ -124,6 +142,7 @@ export const matchSlice = createSlice({
           .map(id => state.allMaps.find(m => m.id === id))
           .filter((m): m is MapTile => m !== undefined)
       }
+      if (action.payload.nextAction !== undefined) state.nextAction = action.payload.nextAction
       if (action.payload.countdownMs) {
         state.countdownEndTime = Date.now() + action.payload.countdownMs
       }

@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: vetool
       POSTGRES_PASSWORD: vetool_dev_password
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -48,10 +48,9 @@ services:
       - POSTGRES_PASSWORD=vetool_dev_password
       - REDIS_CONNECTION=redis:6379
       - JWT__Secret=your-super-secret-jwt-key-change-this-in-production-minimum-32-characters
-      - JWT__Issuer=vetool-api
-      - JWT__Audience=vetool-web
-      - JWT__ExpirationMinutes=60
-      - Hangfire__DashboardEnabled=true
+      - JWT_KEY_PATH=/app/keys/jwt-rsa.pem
+      - JWT_COOKIE_NAME=vetool_jwt
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
     ports:
       - "5001:8080"
     depends_on:
@@ -62,8 +61,7 @@ services:
     networks:
       - vetool-network
     volumes:
-      - ./apps/api:/src/apps/api
-      - ./apps/domain:/src/apps/domain
+      - jwt_keys:/app/keys
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -75,13 +73,24 @@ services:
     build:
       context: apps/web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE: http://localhost:5001/api/v1
+        API_BASE_INTERNAL: http://api:8080/api/v1
     container_name: vetool-web
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - NEXT_PUBLIC_API_BASE=http://localhost:5001/api/v1
       - API_BASE_INTERNAL=http://api:8080/api/v1
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     depends_on:
       api:
         condition: service_healthy
@@ -95,3 +104,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  jwt_keys:

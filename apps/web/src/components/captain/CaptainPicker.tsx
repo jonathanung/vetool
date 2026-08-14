@@ -39,12 +39,12 @@ export default function CaptainPicker({ players }: Props) {
   function handlePick(playerId: string) {
     if (!captainA || !captainB) return
 
-    const nextA = teamA.slice()
-    const nextB = teamB.slice()
+    const nextA = teamA.includes(captainA) ? teamA.slice() : [captainA, ...teamA]
+    const nextB = teamB.includes(captainB) ? teamB.slice() : [captainB, ...teamB]
 
     if (teamTurn === 'A') {
-      nextA.push(playerId)
-    } else {
+      if (!nextA.includes(playerId)) nextA.push(playerId)
+    } else if (!nextB.includes(playerId)) {
       nextB.push(playerId)
     }
 

@@ -1,11 +1,12 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit'
+import { rosterFromMembers } from '@/lib/teams'
 
 export interface Member {
   id: string
   name: string
   odidUserId?: string
-  role?: 'Owner' | 'Captain' | 'Player'
-  team?: 'A' | 'B' | 'None'
+  role?: string
+  team?: string
 }
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -44,7 +45,7 @@ export const lobbySlice = createSlice({
       state.connectionStatus = 'connecting'
       state.error = null
       if (action.payload.initialMembers) {
-        state.members = action.payload.initialMembers
+        applyMembers(state, action.payload.initialMembers)
       }
     },
     connected: (state) => {
@@ -75,7 +76,20 @@ export const lobbySlice = createSlice({
 
     // Members
     setMembers: (state, action: PayloadAction<Member[]>) => {
-      state.members = action.payload
+      applyMembers(state, action.payload)
+    },
+    applySnapshot: (state, action: PayloadAction<{
+      members?: Member[]
+      teamA?: string[]
+      teamB?: string[]
+      captainA?: string | null
+      captainB?: string | null
+    }>) => {
+      if (action.payload.members) applyMembers(state, action.payload.members)
+      if (action.payload.teamA) state.teamA = action.payload.teamA
+      if (action.payload.teamB) state.teamB = action.payload.teamB
+      if (action.payload.captainA) state.captainA = action.payload.captainA
+      if (action.payload.captainB) state.captainB = action.payload.captainB
     },
     userJoined: (state, action: PayloadAction<{ seq: number; member: Member }>) => {
       if (action.payload.seq <= state.seq) return
@@ -95,15 +109,20 @@ export const lobbySlice = createSlice({
 
     // Captains - actions that trigger SignalR invocations
     setCaptains: (state, action: PayloadAction<{ captainA: string; captainB: string }>) => {
-      // Optimistic update - will be confirmed by SignalR event
       state.captainA = action.payload.captainA
       state.captainB = action.payload.captainB
+      if (!state.teamA.includes(action.payload.captainA)) state.teamA = [action.payload.captainA, ...state.teamA]
+      if (!state.teamB.includes(action.payload.captainB)) state.teamB = [action.payload.captainB, ...state.teamB]
     },
-    captainsSet: (state, action: PayloadAction<{ seq: number; captainA: string; captainB: string }>) => {
+    captainsSet: (state, action: PayloadAction<{ seq: number; captainA: string; captainB: string; teamA?: string[]; teamB?: string[] }>) => {
       if (action.payload.seq <= state.seq) return
       state.seq = action.payload.seq
       state.captainA = action.payload.captainA
       state.captainB = action.payload.captainB
+      if (action.payload.teamA) state.teamA = action.payload.teamA
+      else if (!state.teamA.includes(action.payload.captainA)) state.teamA = [action.payload.captainA, ...state.teamA]
+      if (action.payload.teamB) state.teamB = action.payload.teamB
+      else if (!state.teamB.includes(action.payload.captainB)) state.teamB = [action.payload.captainB, ...state.teamB]
     },
 
     // Teams - actions that trigger SignalR invocations
@@ -129,6 +148,15 @@ export const lobbySlice = createSlice({
   },
 })
 
+function applyMembers(state: LobbyState, members: Member[]) {
+  state.members = members
+  const roster = rosterFromMembers(members)
+  state.teamA = roster.teamA
+  state.teamB = roster.teamB
+  if (roster.captainA) state.captainA = roster.captainA
+  if (roster.captainB) state.captainB = roster.captainB
+}
+
 export const {
   connect,
   connected,
@@ -137,6 +165,7 @@ export const {
   disconnected,
   connectionError,
   setMembers,
+  applySnapshot,
   userJoined,
   userLeft,
   setCaptains,

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.Ignore<JsonDocument>();
         builder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
         var gameConverter = new EnumToStringConverter<Game>();
@@ -120,5 +122,23 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             b.Property(x => x.Game).HasConversion(gameConverter).HasMaxLength(8);
             b.HasIndex(x => new { x.UserId, x.Game }).IsUnique();
         });
+
+        var jsonConverter = new ValueConverter<JsonDocument?, string?>(
+            v => SerializeJson(v),
+            v => ParseJson(v));
+        foreach (var entityType in builder.Model.GetEntityTypes())
+        {
+            foreach (var property in entityType.ClrType.GetProperties()
+                         .Where(p => p.PropertyType == typeof(JsonDocument)))
+            {
+                builder.Entity(entityType.ClrType).Property(property.Name).HasConversion(jsonConverter);
+            }
+        }
     }
+
+    private static string? SerializeJson(JsonDocument? document)
+        => document == null ? null : document.RootElement.GetRawText();
+
+    private static JsonDocument? ParseJson(string? json)
+        => string.IsNullOrWhiteSpace(json) ? null : JsonDocument.Parse(json);
 } 

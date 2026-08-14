@@ -1,6 +1,6 @@
 import { Middleware, Dispatch, UnknownAction } from '@reduxjs/toolkit'
 import * as signalR from '@microsoft/signalr'
-import { HUB_LOBBY_URL, HUB_VETO_URL } from '@/lib/config'
+import { getHubLobbyUrl, getHubVetoUrl } from '@/lib/config'
 
 type AppDispatch = Dispatch<UnknownAction>
 import {
@@ -11,6 +11,7 @@ import {
   disconnected as lobbyDisconnected,
   connectionError as lobbyConnectionError,
   setMembers,
+  applySnapshot,
   userJoined,
   userLeft,
   setCaptains,
@@ -20,6 +21,7 @@ import {
   setError as setLobbyError,
   type Member,
 } from '../slices/lobbySlice'
+import { normalizeTeam } from '@/lib/teams'
 import {
   connect as matchConnect,
   connected as matchConnected,
@@ -53,7 +55,7 @@ async function fetchLobbyMembers(lobbyId: string): Promise<Member[]> {
       id: m.userId || m.id || '',
       name: m.displayName || m.userName || 'Player',
       role: m.role,
-      team: m.team,
+      team: normalizeTeam(m.team),
     }))
   } catch {
     return []
@@ -78,7 +80,7 @@ async function handleLobbyConnect(
 
   // Create new connection
   lobbyConnection = new signalR.HubConnectionBuilder()
-    .withUrl(HUB_LOBBY_URL, { withCredentials: true })
+    .withUrl(getHubLobbyUrl(), { withCredentials: true })
     .withAutomaticReconnect()
     .build()
 
@@ -99,14 +101,34 @@ async function handleLobbyConnect(
     }
   })
 
-  lobbyConnection.on('CaptainsSet', async (evt: { seq?: number; payload?: { captainA?: string; captainB?: string } }) => {
+  lobbyConnection.on('LobbySnapshot', (evt: { seq?: number; payload?: { members?: Array<{ userId?: string; displayName?: string; userName?: string; role?: string; team?: string }>; teamA?: string[]; teamB?: string[]; captainA?: string; captainB?: string } }) => {
+    const payload = evt.payload
+    if (!payload) return
+    const members = (payload.members || []).map((m) => ({
+      id: m.userId || '',
+      name: m.displayName || m.userName || 'Player',
+      role: m.role,
+      team: normalizeTeam(m.team),
+    }))
+    dispatch(applySnapshot({
+      members,
+      teamA: (payload.teamA || []).map(String),
+      teamB: (payload.teamB || []).map(String),
+      captainA: payload.captainA ? String(payload.captainA) : null,
+      captainB: payload.captainB ? String(payload.captainB) : null,
+    }))
+  })
+
+  lobbyConnection.on('CaptainsSet', async (evt: { seq?: number; payload?: { captainA?: string; captainB?: string; teamAUserId?: string; teamBUserId?: string; teamA?: string[]; teamB?: string[] } }) => {
     const members = await fetchLobbyMembers(lobbyId)
     dispatch(setMembers(members))
     if (evt.seq && evt.payload) {
       dispatch(captainsSet({
         seq: evt.seq,
-        captainA: evt.payload.captainA || '',
-        captainB: evt.payload.captainB || '',
+        captainA: String(evt.payload.captainA || evt.payload.teamAUserId || ''),
+        captainB: String(evt.payload.captainB || evt.payload.teamBUserId || ''),
+        teamA: evt.payload.teamA?.map(String),
+        teamB: evt.payload.teamB?.map(String),
       }))
     }
   })
@@ -146,12 +168,8 @@ async function handleLobbyConnect(
     await lobbyConnection.invoke('JoinLobby', lobbyId)
     dispatch(lobbyConnected())
 
-    if (initialMembers?.length) {
-      dispatch(setMembers(initialMembers))
-    } else {
-      const members = await fetchLobbyMembers(lobbyId)
-      dispatch(setMembers(members))
-    }
+    const members = await fetchLobbyMembers(lobbyId)
+    dispatch(setMembers(members.length ? members : initialMembers || []))
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to connect to lobby'
     dispatch(lobbyConnectionError(message))
@@ -171,17 +189,6 @@ async function handleLobbyDisconnect(lobbyId: string | null, dispatch: AppDispat
       // Ignore cleanup errors
     }
     lobbyConnection = null
-  }
-
-  if (lobbyId) {
-    try {
-      await fetch(`/api/lobbies/${lobbyId}/leave`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-    } catch {
-      // Ignore API errors on leave
-    }
   }
 
   dispatch(lobbyDisconnected())
@@ -229,19 +236,25 @@ async function handleMatchConnect(
   }
 
   vetoConnection = new signalR.HubConnectionBuilder()
-    .withUrl(HUB_VETO_URL, { withCredentials: true })
+    .withUrl(getHubVetoUrl(), { withCredentials: true })
     .withAutomaticReconnect()
     .build()
 
-  vetoConnection.on('VetoSessionStarted', (evt: { seq?: number; payload?: { available?: string[]; countdownMs?: number } }) => {
+  vetoConnection.on('VetoSessionStarted', (evt: { seq?: number; payload?: { available?: string[]; picks?: string[]; bans?: string[]; stepIndex?: number; team?: 'A' | 'B' | 'None'; complete?: boolean; nextAction?: 'ban' | 'pick' | null; countdownMs?: number } }) => {
     dispatch(vetoSessionStarted({
       seq: evt.seq || 0,
       available: evt.payload?.available || [],
+      picks: evt.payload?.picks,
+      bans: evt.payload?.bans,
+      stepIndex: evt.payload?.stepIndex,
+      team: evt.payload?.team,
+      complete: evt.payload?.complete,
+      nextAction: evt.payload?.nextAction,
       countdownMs: evt.payload?.countdownMs,
     }))
   })
 
-  vetoConnection.on('VetoProgress', (evt: { seq?: number; payload?: { stepIndex?: number; team?: 'A' | 'B' | 'None'; picks?: string[]; bans?: string[]; available?: string[]; countdownMs?: number } }) => {
+  vetoConnection.on('VetoProgress', (evt: { seq?: number; payload?: { stepIndex?: number; team?: 'A' | 'B' | 'None'; picks?: string[]; bans?: string[]; available?: string[]; nextAction?: 'ban' | 'pick' | null; countdownMs?: number } }) => {
     if (evt.seq && evt.payload) {
       dispatch(vetoProgress({
         seq: evt.seq,
@@ -250,6 +263,7 @@ async function handleMatchConnect(
         picks: evt.payload.picks,
         bans: evt.payload.bans,
         available: evt.payload.available,
+        nextAction: evt.payload.nextAction,
         countdownMs: evt.payload.countdownMs,
       }))
     }

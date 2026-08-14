@@ -6,10 +6,10 @@ export default function Home() {
       {/* Hero Section */}
       <div className="text-center space-y-4">
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight">
-          Organize Your Scrims
+          Share a link. Draft. Veto. Play.
         </h1>
         <p className="text-lg text-text-muted max-w-xl mx-auto">
-          The minimalist way to handle CS2 and Valorant scrimmages with realtime lobbies, captain picks, and map veto.
+          The custom-game organizer for CS2 and VALORANT — live lobbies, 1-2-2-2-1 captain draft, BO1/BO3/BO5 veto, then a copyable connect string or party code.
         </p>
       </div>
 
