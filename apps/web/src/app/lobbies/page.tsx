@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { serverApiGet } from '@/lib/api'
 import CreateLobbyForm from './CreateLobbyForm'
 import RefreshButton from './RefreshButton'
+import { remainingLabel } from '@/lib/lobbyTime'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,9 +121,10 @@ export default async function LobbiesPage({ searchParams }: { searchParams: { ga
           </div>
         ) : (
           <div className="border border-border bg-card">
-            <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_9rem_7.5rem] gap-4 px-4 py-2 bg-bg-secondary font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+            <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_9rem_8rem_7.5rem] gap-4 px-4 py-2 bg-bg-secondary font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
               <span>Room</span>
               <span>Status</span>
+              <span>Life</span>
               <span className="text-right">Seats</span>
             </div>
             <ul className="divide-y divide-border">
@@ -138,12 +140,13 @@ export default async function LobbiesPage({ searchParams }: { searchParams: { ga
                 const memberCount = pick(lobby, 'memberCount', 'MemberCount')
                 const maxPlayers = pick(lobby, 'maxPlayers', 'MaxPlayers')
                 const hasSeats = memberCount != null || maxPlayers != null
+                const life = remainingLabel(pick(lobby, 'expiresAt', 'ExpiresAt'))
 
                 return (
                   <li key={lobby.id}>
                     <Link
                       href={`/lobbies/${lobby.id}`}
-                      className={`group grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_9rem_7.5rem] items-center gap-2 sm:gap-4 px-4 py-3 transition-colors border-l-[3px] border-l-transparent hover:bg-card-hover ${
+                      className={`group grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_9rem_8rem_7.5rem] items-center gap-2 sm:gap-4 px-4 py-3 transition-colors border-l-[3px] border-l-transparent hover:bg-card-hover ${
                         val ? 'hover:border-l-val' : 'hover:border-l-cs2'
                       }`}
                     >
@@ -157,6 +160,9 @@ export default async function LobbiesPage({ searchParams }: { searchParams: { ga
                       </div>
                       <div>
                         <span className={`bento-badge ${statusConfig.className}`}>{statusConfig.label}</span>
+                      </div>
+                      <div className="font-mono text-[0.6875rem] tracking-[0.08em] uppercase text-text-muted">
+                        {life || '24h'}
                       </div>
                       <div className="flex items-center justify-between sm:justify-end gap-3 text-text-muted">
                         {hasSeats && (

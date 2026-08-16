@@ -65,6 +65,11 @@ public class UiSurfaceTests
         lobby.Should().Contain("first pick");
         lobby.Should().Contain("last pick");
         lobby.Should().Contain("canStartVeto");
+        lobby.Should().Contain("LobbyChat");
+
+        var chat = Read("components", "lobby", "LobbyChat.tsx");
+        chat.Should().Contain("Lobby chat");
+        chat.Should().Contain("Send");
 
         var match = Read("app", "matches", "[id]", "VetoClient.tsx");
         match.Should().Contain("Join details");

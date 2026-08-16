@@ -27,6 +27,15 @@ public class ModelMetadataTests
     }
 
     [Fact]
+    public void Lobby_has_index_on_ExpiresAt()
+    {
+        using var db = CreateContext();
+        var entity = db.Model.FindEntityType(typeof(VeTool.Domain.Entities.Lobby));
+        entity.Should().NotBeNull();
+        entity!.GetIndexes().Should().Contain(i => i.Properties.Any(p => p.Name == "ExpiresAt"));
+    }
+
+    [Fact]
     public void GameMap_has_unique_index_on_Game_Code()
     {
         using var db = CreateContext();

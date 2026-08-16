@@ -20,6 +20,7 @@ import {
 import { pickChoiceLabel, startingSide, type PickChoice } from '@/lib/vetoChoice'
 import { useGetMeQuery } from '@/store/api/authApi'
 import { addToast } from '@/store/slices/uiSlice'
+import LobbyChat from '@/components/lobby/LobbyChat'
 
 export default function LobbyClient({
   lobbyId,
@@ -28,6 +29,7 @@ export default function LobbyClient({
   maxPlayers,
   currentMatchId,
   hostUserId,
+  expired,
 }: {
   lobbyId: string
   initialMembers: Member[]
@@ -35,6 +37,7 @@ export default function LobbyClient({
   maxPlayers: number
   currentMatchId: string | null
   hostUserId: string | null
+  expired?: boolean
 }) {
   const dispatch = useAppDispatch()
   const router = useRouter()
@@ -61,6 +64,7 @@ export default function LobbyClient({
     let active = true
 
     async function joinAndConnect() {
+      if (expired) return
       try {
         await joinLobby(lobbyId).unwrap()
         if (active) {
@@ -69,7 +73,9 @@ export default function LobbyClient({
       } catch (err: any) {
         if (active) {
           const status = err?.status
-          const message = status === 409
+          const message = status === 410
+            ? 'This lobby expired.'
+            : status === 409
             ? 'This lobby is full.'
             : status === 404
               ? 'Lobby not found.'
@@ -357,6 +363,8 @@ export default function LobbyClient({
         </ul>
       </section>
 
+      <LobbyChat disabled={expired} />
+
       <section className="bento-card p-5 space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -392,7 +400,7 @@ export default function LobbyClient({
           <button
             type="button"
             onClick={handleStart}
-            disabled={!isHost || starting || (!currentMatchId && !canStartVeto)}
+            disabled={!isHost || starting || expired || (!currentMatchId && !canStartVeto)}
             className="bento-btn bento-btn-primary"
           >
             {starting ? 'Starting...' : currentMatchId ? 'Open match' : 'start veto'}

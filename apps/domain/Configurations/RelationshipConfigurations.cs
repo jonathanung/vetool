@@ -6,6 +6,7 @@ namespace VeTool.Domain.Configurations;
 
 public class RelationshipConfigurations : IEntityTypeConfiguration<Lobby>,
     IEntityTypeConfiguration<LobbyMembership>,
+    IEntityTypeConfiguration<LobbyChatMessage>,
     IEntityTypeConfiguration<MapPoolMap>,
     IEntityTypeConfiguration<Match>,
     IEntityTypeConfiguration<VetoSession>,
@@ -21,6 +22,16 @@ public class RelationshipConfigurations : IEntityTypeConfiguration<Lobby>,
     }
 
     public void Configure(EntityTypeBuilder<LobbyMembership> builder)
+    {
+        builder.HasOne<Lobby>().WithMany()
+            .HasForeignKey(x => x.LobbyId)
+            .OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<ApplicationUser>().WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+
+    public void Configure(EntityTypeBuilder<LobbyChatMessage> builder)
     {
         builder.HasOne<Lobby>().WithMany()
             .HasForeignKey(x => x.LobbyId)

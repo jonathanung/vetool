@@ -139,8 +139,14 @@ else
 
 services.AddSingleton<ICaptainPicker, CaptainPicker>();
 services.AddScoped<LobbyMembershipService>();
+services.AddScoped<LobbyChatService>();
+services.AddScoped<LobbyExpiryService>();
 services.AddScoped<VetoSessionService>();
 services.AddScoped<MatchLifecycleService>();
+if (!isTesting)
+{
+    services.AddHostedService<LobbyExpiryWorker>();
+}
 
 services.AddSingleton<ICs2PoolProvider, Cs2PoolProvider>();
 services.AddSingleton<IValPoolProvider, ValPoolProvider>();

@@ -108,6 +108,35 @@ public class LobbyHttpTests : IClassFixture<VetoolApiFactory>
         joinerRows.Should().Be(1);
     }
 
+    [Fact]
+    public async Task Chat_posts_and_lists_messages_for_members()
+    {
+        var host = _factory.CreateClient();
+        await RegisterAndLoginAsync(host, "chat-host", "chat-host@example.com");
+        var created = await host.PostAsJsonAsync("/api/v1/lobbies", new
+        {
+            game = 0,
+            name = "Chat Lobby",
+            maxPlayers = 10,
+            isPublic = true
+        });
+        created.EnsureSuccessStatusCode();
+        var lobby = await created.Content.ReadFromJsonAsync<JsonElement>(Json);
+        var lobbyId = lobby.GetProperty("id").GetGuid();
+        lobby.TryGetProperty("expiresAt", out var expires).Should().BeTrue();
+        expires.GetDateTime().Should().BeAfter(DateTime.UtcNow.AddHours(23));
+
+        var sent = await host.PostAsJsonAsync($"/api/v1/lobbies/{lobbyId}/messages", new { body = "  knife?  " });
+        sent.EnsureSuccessStatusCode();
+        var msg = await sent.Content.ReadFromJsonAsync<JsonElement>(Json);
+        msg.GetProperty("body").GetString().Should().Be("knife?");
+
+        var list = await host.GetFromJsonAsync<JsonElement>($"/api/v1/lobbies/{lobbyId}/messages");
+        list.GetArrayLength().Should().Be(1);
+        list[0].GetProperty("body").GetString().Should().Be("knife?");
+        list[0].GetProperty("userName").GetString().Should().Be("chat-host");
+    }
+
     private static async Task<HttpClient> RegisterAndLoginAsync(HttpClient client, string username, string email)
     {
         var register = await client.PostAsJsonAsync("/api/v1/auth/register", new

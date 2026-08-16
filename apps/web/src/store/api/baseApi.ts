@@ -10,6 +10,6 @@ export const baseApi = createApi({
       return headers
     },
   }),
-  tagTypes: ['Auth', 'Lobbies', 'Lobby', 'LobbyMembers', 'Matches', 'Match'],
+  tagTypes: ['Auth', 'Lobbies', 'Lobby', 'LobbyMembers', 'LobbyMessages', 'Matches', 'Match'],
   endpoints: () => ({}),
 })

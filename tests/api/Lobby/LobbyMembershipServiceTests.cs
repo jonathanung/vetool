@@ -50,6 +50,20 @@ public class LobbyMembershipServiceTests
     }
 
     [Fact]
+    public async Task TryJoin_returns_expired_when_lobby_is_past_ttl()
+    {
+        var (db, svc, lobbyId, _) = await SeedLobby();
+        using (db)
+        {
+            var lobby = await db.Lobbies.SingleAsync(l => l.Id == lobbyId);
+            lobby.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+            await db.SaveChangesAsync();
+            var outcome = await svc.TryJoinAsync(lobbyId, Guid.NewGuid());
+            outcome.Should().Be(JoinOutcome.Expired);
+        }
+    }
+
+    [Fact]
     public async Task TryJoin_returns_not_found_when_lobby_is_missing()
     {
         using var db = CreateDb();

@@ -11,6 +11,14 @@ export interface Member {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 
+export interface ChatLine {
+  id: string
+  userId: string
+  name: string
+  body: string
+  createdAt: string
+}
+
 interface LobbyState {
   currentLobbyId: string | null
   connectionStatus: ConnectionStatus
@@ -19,6 +27,7 @@ interface LobbyState {
   teamB: string[]
   captainA: string | null
   captainB: string | null
+  messages: ChatLine[]
   seq: number
   error: string | null
 }
@@ -31,6 +40,7 @@ const initialState: LobbyState = {
   teamB: [],
   captainA: null,
   captainB: null,
+  messages: [],
   seq: 0,
   error: null,
 }
@@ -66,6 +76,7 @@ export const lobbySlice = createSlice({
       state.teamB = []
       state.captainA = null
       state.captainB = null
+      state.messages = []
       state.seq = 0
       state.error = null
     },
@@ -139,6 +150,17 @@ export const lobbySlice = createSlice({
     },
 
     // Error handling
+    sendChat: (_state, _action: PayloadAction<{ body: string }>) => {
+      // middleware invokes the hub
+    },
+    setChatHistory: (state, action: PayloadAction<ChatLine[]>) => {
+      state.messages = action.payload
+    },
+    chatMessage: (state, action: PayloadAction<ChatLine>) => {
+      if (state.messages.some((m) => m.id === action.payload.id)) return
+      state.messages.push(action.payload)
+    },
+
     setError: (state, action: PayloadAction<string>) => {
       state.error = action.payload
     },
@@ -172,6 +194,9 @@ export const {
   captainsSet,
   updateTeams,
   teamsUpdated,
+  sendChat,
+  setChatHistory,
+  chatMessage,
   setError,
   clearError,
 } = lobbySlice.actions

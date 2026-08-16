@@ -9,6 +9,20 @@ export interface Lobby {
   isPublic: boolean
   isMine?: boolean
   createdByUserId: string
+  createdAt?: string
+  expiresAt?: string
+  expired?: boolean
+  memberCount?: number
+}
+
+export interface LobbyChatMessage {
+  id: string
+  lobbyId: string
+  userId: string
+  userName: string
+  displayName: string
+  body: string
+  createdAt: string
 }
 
 export interface LobbyMember {
@@ -144,6 +158,20 @@ export const lobbiesApi = baseApi.injectEndpoints({
       invalidatesTags: (_r, _e, { lobbyId }) => [{ type: 'Lobby', id: lobbyId }, { type: 'Lobby', id: `${lobbyId}-maps` }],
     }),
 
+    getLobbyMessages: builder.query<LobbyChatMessage[], string>({
+      query: (id) => `/lobbies/${id}/messages`,
+      providesTags: (_r, _e, id) => [{ type: 'LobbyMessages', id }],
+    }),
+
+    postLobbyMessage: builder.mutation<LobbyChatMessage, { lobbyId: string; body: string }>({
+      query: ({ lobbyId, body }) => ({
+        url: `/lobbies/${lobbyId}/messages`,
+        method: 'POST',
+        body: { body },
+      }),
+      invalidatesTags: (_r, _e, { lobbyId }) => [{ type: 'LobbyMessages', id: lobbyId }],
+    }),
+
     startMatch: builder.mutation<any, { lobbyId: string; bestOf: number }>({
       query: ({ lobbyId, bestOf }) => ({
         url: `/lobbies/${lobbyId}/matches`,
@@ -172,4 +200,6 @@ export const {
   useSetLobbyMapsMutation,
   useSetFirstPickMutation,
   useStartMatchMutation,
+  useGetLobbyMessagesQuery,
+  usePostLobbyMessageMutation,
 } = lobbiesApi

@@ -18,8 +18,12 @@ import {
   captainsSet,
   updateTeams,
   teamsUpdated,
+  sendChat,
+  setChatHistory,
+  chatMessage,
   setError as setLobbyError,
   type Member,
+  type ChatLine,
 } from '../slices/lobbySlice'
 import { normalizeTeam } from '@/lib/teams'
 import {
@@ -141,6 +145,16 @@ async function handleLobbyConnect(
         teamB: evt.payload.teamB || [],
       }))
     }
+  })
+
+  lobbyConnection.on('ChatHistory', (evt: { payload?: Array<{ id?: string; userId?: string; displayName?: string; userName?: string; body?: string; createdAt?: string }> }) => {
+    const lines = (evt.payload ?? []).map(toChatLine).filter((m): m is ChatLine => Boolean(m))
+    dispatch(setChatHistory(lines))
+  })
+
+  lobbyConnection.on('ChatMessage', (evt: { payload?: { id?: string; userId?: string; displayName?: string; userName?: string; body?: string; createdAt?: string } }) => {
+    const line = toChatLine(evt.payload)
+    if (line) dispatch(chatMessage(line))
   })
 
   lobbyConnection.on('Error', (evt: { payload?: { message?: string }; message?: string }) => {
@@ -373,6 +387,18 @@ export const signalRMiddleware: Middleware = (store) => (next) => (action) => {
     }
   }
 
+  if (sendChat.match(action)) {
+    const state = store.getState() as { lobby: { currentLobbyId: string | null } }
+    if (state.lobby.currentLobbyId && lobbyConnection) {
+      void lobbyConnection.invoke('SendChat', state.lobby.currentLobbyId, action.payload.body, crypto.randomUUID())
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : 'Failed to send chat'
+          dispatch(setLobbyError(message))
+          dispatch(addToast({ type: 'error', message }))
+        })
+    }
+  }
+
   if (matchConnect.match(action)) {
     const { matchId, mode } = action.payload
     void handleMatchConnect(matchId, mode, dispatch)
@@ -400,6 +426,17 @@ export const signalRMiddleware: Middleware = (store) => (next) => (action) => {
   }
 
   return result
+}
+
+function toChatLine(raw?: { id?: string; userId?: string; displayName?: string; userName?: string; body?: string; createdAt?: string }): ChatLine | null {
+  if (!raw?.id || !raw.body) return null
+  return {
+    id: String(raw.id),
+    userId: String(raw.userId || ''),
+    name: raw.displayName || raw.userName || 'Player',
+    body: raw.body,
+    createdAt: raw.createdAt || new Date().toISOString(),
+  }
 }
 
 export default signalRMiddleware
