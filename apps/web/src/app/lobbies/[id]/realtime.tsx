@@ -55,6 +55,7 @@ export default function LobbyClient({
   const shareUrl = typeof window === 'undefined' ? '' : `${window.location.origin}/lobbies/${lobbyId}`
   const isHost = !!me?.id && !!hostUserId && me.id === hostUserId
   const canStartVeto = Boolean(captainA && captainB && members.length >= 2)
+  const isVal = String(game).toLowerCase().includes('val')
 
   useEffect(() => {
     let active = true
@@ -171,17 +172,9 @@ export default function LobbyClient({
   if (joinError) {
     return (
       <div className="bento-card p-6 space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-bento-sm bg-danger-soft flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          </div>
-          <div className="space-y-1">
-            <h3 className="font-semibold">Unable to join lobby</h3>
-            <p className="text-sm text-text-muted">The lobby may be full, missing, or you need to join as a guest.</p>
-          </div>
-        </div>
+        <p className="kicker">Error</p>
+        <h3 className="font-display text-3xl text-danger">Unable to join lobby</h3>
+        <p className="text-sm text-text-muted">The lobby may be full, missing, or you need to join as a guest.</p>
         <button type="button" onClick={handleGuestJoin} disabled={guestLoading} className="bento-btn bento-btn-primary">
           {guestLoading ? 'Joining...' : 'Join as Guest'}
         </button>
@@ -191,8 +184,10 @@ export default function LobbyClient({
 
   if (connectionStatus === 'connecting' || joining) {
     return (
-      <div className="bento-card p-8 text-center">
-        <div className="animate-pulse text-text-muted">Joining lobby...</div>
+      <div className="bento-card p-8 space-y-3">
+        <p className="kicker">Live</p>
+        <h3 className="font-display text-3xl">Joining lobby...</h3>
+        <p className="text-sm text-text-muted">Hold — seating the room.</p>
       </div>
     )
   }
@@ -200,17 +195,9 @@ export default function LobbyClient({
   if (connectionStatus === 'error') {
     return (
       <div className="bento-card p-6 space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-bento-sm bg-danger-soft flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </div>
-          <div className="space-y-1">
-            <h3 className="font-semibold">Connection Error</h3>
-            <p className="text-sm text-text-muted">{error || 'Unable to connect to the lobby'}</p>
-          </div>
-        </div>
+        <p className="kicker">Error</p>
+        <h3 className="font-display text-3xl text-danger">Connection Error</h3>
+        <p className="text-sm text-text-muted">{error || 'Unable to connect to the lobby'}</p>
         <button type="button" onClick={() => dispatch(connect({ lobbyId, initialMembers }))} className="bento-btn bento-btn-secondary">
           Retry Connection
         </button>
@@ -223,21 +210,19 @@ export default function LobbyClient({
   return (
     <div className="space-y-6">
       {isReconnecting && (
-        <div className="bento-card p-3 bg-warning-soft border-warning/20">
-          <div className="flex items-center gap-2 text-sm text-warning">
-            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-            Reconnecting... membership is still saved.
+        <div className="bento-card p-4 bg-warning-soft">
+          <div className="flex items-center gap-3">
+            <span className="kicker">Live</span>
+            <span className="font-display text-2xl text-warning">Reconnecting</span>
+            <span className="text-sm text-text-muted">Membership is still saved.</span>
           </div>
         </div>
       )}
 
       <div className="bento-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="text-xs uppercase tracking-wide text-text-muted mb-1">Share lobby</div>
-          <div className="font-mono text-sm truncate text-text-secondary">{shareUrl || `/lobbies/${lobbyId}`}</div>
+          <div className="kicker">SHARE</div>
+          <div className="font-mono text-sm truncate text-text-secondary mt-1">{shareUrl || `/lobbies/${lobbyId}`}</div>
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={handleCopy} className="bento-btn bento-btn-secondary">
@@ -249,82 +234,107 @@ export default function LobbyClient({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <div className="bento-card p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-bento-sm bg-primary-soft flex items-center justify-center">
-              <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <h2 className="font-semibold">Captain Selection</h2>
-            <span className="text-xs text-text-muted ml-auto">{members.length}/{maxPlayers}</span>
-          </div>
-          <CaptainPicker players={members} />
-        </div>
-
-        <div className="bento-card p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-bento-sm bg-accent-soft flex items-center justify-center">
-              <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h2 className="font-semibold">Live Teams</h2>
-            <span className="bento-badge bento-badge-success ml-auto">Live</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-primary">Team A</h3>
+      <div className="grid md:grid-cols-2 gap-3">
+        <section className="bento-card overflow-hidden">
+          <div className="flex">
+            <div className="w-1.5 shrink-0 bg-team-a" />
+            <div className="flex-1 p-5 space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="kicker">Red</p>
+                  <h2 className="font-display text-4xl text-team-a leading-none mt-1">Team A</h2>
+                </div>
+                <div className="stat py-2 px-3">
+                  <div className="stat-value text-team-a text-3xl">{teamA.length}</div>
+                  <div className="stat-label">Roster</div>
+                </div>
+              </div>
               <ul className="space-y-1.5">
                 {teamA.length === 0 ? (
-                  <li className="text-sm text-text-muted">No players yet</li>
+                  <li className="text-sm text-text-muted px-3 py-2 border border-border">No players yet</li>
                 ) : (
                   teamA.map((id) => (
-                    <li key={id} className="text-sm px-3 py-2 rounded-bento-sm bg-primary-soft text-primary">
-                      {memberMap.get(id) || id}
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-accent">Team B</h3>
-              <ul className="space-y-1.5">
-                {teamB.length === 0 ? (
-                  <li className="text-sm text-text-muted">No players yet</li>
-                ) : (
-                  teamB.map((id) => (
-                    <li key={id} className="text-sm px-3 py-2 rounded-bento-sm bg-accent-soft text-accent">
-                      {memberMap.get(id) || id}
-                    </li>
-                  ))
-                )}
-              </ul>
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-text-muted">Unassigned</h3>
-              <ul className="space-y-1.5">
-                {unassigned.length === 0 ? (
-                  <li className="text-sm text-text-muted">All assigned</li>
-                ) : (
-                  unassigned.map((m) => (
-                    <li key={m.id} className="text-sm px-3 py-2 rounded-bento-sm bg-bg-secondary text-text-secondary">
-                      {m.name}
+                    <li key={id} className="flex items-center justify-between gap-2 text-sm px-3 py-2 bg-primary-soft text-team-a">
+                      <span className="truncate">{memberMap.get(id) || id}</span>
+                      {id === captainA && <span className="bento-badge chip-a">C</span>}
                     </li>
                   ))
                 )}
               </ul>
             </div>
           </div>
-        </div>
+        </section>
+
+        <section className="bento-card overflow-hidden">
+          <div className="flex">
+            <div className="w-1.5 shrink-0 bg-team-b" />
+            <div className="flex-1 p-5 space-y-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="kicker">Blue</p>
+                  <h2 className="font-display text-4xl text-team-b leading-none mt-1">Team B</h2>
+                </div>
+                <div className="stat py-2 px-3">
+                  <div className="stat-value text-team-b text-3xl">{teamB.length}</div>
+                  <div className="stat-label">Roster</div>
+                </div>
+              </div>
+              <ul className="space-y-1.5">
+                {teamB.length === 0 ? (
+                  <li className="text-sm text-text-muted px-3 py-2 border border-border">No players yet</li>
+                ) : (
+                  teamB.map((id) => (
+                    <li key={id} className="flex items-center justify-between gap-2 text-sm px-3 py-2 bg-accent-soft text-team-b">
+                      <span className="truncate">{memberMap.get(id) || id}</span>
+                      {id === captainB && <span className="bento-badge chip-b">C</span>}
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <div className="bento-card p-6 space-y-4">
-        <h2 className="font-semibold lowercase">map pool</h2>
-        <p className="text-sm text-text-muted lowercase">defaults to active duty / ranked. add or remove any catalog map.</p>
-        <ul className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <section className="bento-card p-5 space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="kicker">Bench</p>
+            <h3 className="font-display text-2xl leading-none mt-1">Unassigned</h3>
+          </div>
+          <span className="bento-badge bento-badge-muted">{unassigned.length}</span>
+        </div>
+        <ul className="flex flex-wrap gap-2">
+          {unassigned.length === 0 ? (
+            <li className="text-sm text-text-muted">All assigned</li>
+          ) : (
+            unassigned.map((m) => (
+              <li key={m.id} className="text-sm px-3 py-2 border border-border bg-bg-secondary text-text-secondary">
+                {m.name}
+              </li>
+            ))
+          )}
+        </ul>
+      </section>
+
+      <section className="bento-card p-6 space-y-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="kicker">Draft</p>
+            <h2 className="font-display text-3xl leading-none mt-1">Captain Selection</h2>
+          </div>
+          <span className="bento-badge bento-badge-muted">{members.length}/{maxPlayers}</span>
+        </div>
+        <CaptainPicker players={members} />
+      </section>
+
+      <section className="bento-card p-6 space-y-4">
+        <div>
+          <p className="kicker">Pool</p>
+          <h2 className="font-display text-3xl leading-none mt-1">map pool</h2>
+        </div>
+        <p className="text-sm text-text-muted">Defaults to active duty / ranked. Add or remove any catalog map.</p>
+        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {(mapData?.catalog ?? []).map((m) => {
             const on = (mapData?.selected ?? []).some((s) => s.id === m.id)
             return (
@@ -333,7 +343,11 @@ export default function LobbyClient({
                   type="button"
                   disabled={!isHost || savingMaps}
                   onClick={() => toggleMap(m.id)}
-                  className={`w-full text-left px-3 py-2 rounded-bento-sm border text-sm ${on ? 'bg-primary text-primary-contrast border-primary' : 'border-border text-text-muted'}`}
+                  className={`w-full min-h-[4.5rem] px-3 py-3 border text-left font-display text-xl leading-none tracking-wide ${
+                    on
+                      ? 'bg-team-a text-white border-team-a'
+                      : 'border-border text-text-muted bg-transparent'
+                  }`}
                 >
                   {m.name}
                 </button>
@@ -341,27 +355,30 @@ export default function LobbyClient({
             )
           })}
         </ul>
-      </div>
+      </section>
 
-      <div className="bento-card p-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold lowercase">start veto</h2>
-          <span className="bento-badge bento-badge-muted">{game}</span>
+      <section className="bento-card p-5 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="kicker">Command</p>
+            <h2 className="font-display text-3xl leading-none mt-1">start veto</h2>
+            <p className="text-sm text-text-muted mt-2">
+              need two captains. choose first pick or last pick, then start.
+            </p>
+          </div>
+          <span className={`bento-badge ${isVal ? 'chip-val' : 'chip-cs2'}`}>{game}</span>
         </div>
-        <p className="text-sm text-text-muted lowercase">
-          need two captains. choose first pick or last pick, then start.
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3 border-t border-border pt-4">
           <div className="space-y-1.5">
-            <label className="text-sm text-text-secondary lowercase">best of</label>
+            <label className="kicker">Best of</label>
             <select className="bento-input min-w-[120px]" value={bestOf} onChange={(e) => setBestOf(Number(e.target.value))} disabled={!isHost}>
-              <option value={1}>bo1</option>
-              <option value={3}>bo3</option>
-              <option value={5}>bo5</option>
+              <option value={1}>BO1</option>
+              <option value={3}>BO3</option>
+              <option value={5}>BO5</option>
             </select>
           </div>
           <div className="space-y-1.5">
-            <label className="text-sm text-text-secondary lowercase">team a wants</label>
+            <label className="kicker">Team A wants</label>
             <select
               className="bento-input min-w-[140px]"
               value={pickChoice}
@@ -376,18 +393,18 @@ export default function LobbyClient({
             type="button"
             onClick={handleStart}
             disabled={!isHost || starting || (!currentMatchId && !canStartVeto)}
-            className="bento-btn bento-btn-primary lowercase"
+            className="bento-btn bento-btn-primary"
           >
-            {starting ? 'starting...' : currentMatchId ? 'open match' : 'start veto'}
+            {starting ? 'Starting...' : currentMatchId ? 'Open match' : 'start veto'}
           </button>
           {currentMatchId && (
-            <button type="button" onClick={() => router.push(`/matches/${currentMatchId}`)} className="bento-btn bento-btn-secondary lowercase">
-              go to veto
+            <button type="button" onClick={() => router.push(`/matches/${currentMatchId}`)} className="bento-btn bento-btn-secondary">
+              Go to veto
             </button>
           )}
-          {!canStartVeto && <span className="text-xs text-text-muted lowercase">need two captains</span>}
+          {!canStartVeto && <span className="text-xs font-mono tracking-[0.12em] uppercase text-text-muted">need two captains</span>}
         </div>
-      </div>
+      </section>
     </div>
   )
 }

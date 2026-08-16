@@ -20,6 +20,19 @@ const GAME_LABELS: Record<string, string> = {
   'val': 'Valorant',
 }
 
+const SIZES = [
+  { value: 2, label: '1v1' },
+  { value: 4, label: '2v2' },
+  { value: 6, label: '3v3' },
+  { value: 8, label: '4v4' },
+  { value: 10, label: '5v5' },
+] as const
+
+function isValGame(game: unknown) {
+  const key = String(game ?? '').toLowerCase()
+  return key === '1' || key === 'val' || key === 'valorant'
+}
+
 export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }) {
   const router = useRouter()
   const dispatch = useAppDispatch()
@@ -71,35 +84,50 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
       ? existingLobby.game.toLowerCase()
       : String(existingLobby.game)
     const gameLabel = GAME_LABELS[gameKey] || gameKey.toUpperCase()
+    const val = isValGame(existingLobby.game)
 
     return (
       <div className="space-y-4">
-        <div className="bento-card p-6 border-primary/20 bg-primary-soft/30 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <div className="bento-badge bento-badge-primary">Your Active Lobby</div>
-              <div className="text-xl font-semibold">{existingLobby.name}</div>
-              <div className="flex items-center gap-2">
-                <span className="bento-badge bento-badge-muted">{gameLabel}</span>
+        <div className="bento-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-4 py-2 bg-bg-secondary border-b border-border">
+            <p className="kicker">My lobby</p>
+            <span className="font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+              Host
+            </span>
+          </div>
+          <div className="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="min-w-0 space-y-2">
+              <div className="font-display text-3xl md:text-4xl leading-none truncate">
+                {existingLobby.name}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`bento-badge ${val ? 'chip-val' : 'chip-cs2'}`}>{gameLabel}</span>
                 <span className={`bento-badge ${existingLobby.isPublic ? 'bento-badge-success' : 'bento-badge-muted'}`}>
                   {existingLobby.isPublic ? 'Public' : 'Private'}
                 </span>
               </div>
             </div>
-            <Link
-              href={`/lobbies/${existingLobby.id}`}
-              className="bento-btn bento-btn-primary"
-            >
-              Enter Lobby
-            </Link>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Link href={`/lobbies/${existingLobby.id}`} className="bento-btn bento-btn-primary">
+                Enter lobby
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowModal(true)}
+                disabled={submitting}
+                className="bento-btn bento-btn-ghost text-danger hover:bg-danger-soft disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
           </div>
-          <div className="pt-4 border-t border-border flex items-center gap-3">
-            <span className="text-sm text-text-muted">Want to create a new lobby?</span>
+          <div className="px-4 py-3 sm:px-5 border-t border-border flex flex-wrap items-center gap-3">
+            <span className="text-sm text-text-muted">Want a new room?</span>
             <button
               type="button"
               onClick={() => setShowModal(true)}
               disabled={submitting}
-              className="text-sm text-danger hover:underline disabled:opacity-50"
+              className="text-sm font-mono uppercase tracking-[0.12em] text-danger hover:underline disabled:opacity-50"
             >
               Delete and create new
             </button>
@@ -109,7 +137,8 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm">
             <div className="bento-card p-6 max-w-md w-full mx-4 space-y-4 animate-scale-in">
-              <h3 className="text-lg font-semibold">Delete your current lobby?</h3>
+              <p className="kicker">Warning</p>
+              <h3 className="font-display text-3xl leading-none">Delete your current lobby?</h3>
               <p className="text-text-muted">
                 This will permanently delete &quot;{existingLobby.name}&quot; and all its data.
               </p>
@@ -148,66 +177,115 @@ export default function CreateLobbyForm({ defaultGame }: { defaultGame: string }
 
   return (
     <>
-      <form onSubmit={handleCreate} className="bento-card p-6">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex-1 min-w-[200px] space-y-1.5">
-            <label className="block text-sm font-medium text-text-secondary">Lobby name</label>
-            <input
-              className="bento-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter lobby name"
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-text-secondary">Game</label>
-            <select
-              className="bento-input min-w-[120px]"
-              value={game}
-              onChange={(e) => setGame(e.target.value)}
+      <form onSubmit={handleCreate} className="bento-card overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-2 bg-bg-secondary border-b border-border">
+          <p className="kicker">Setup</p>
+          <span className="font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+            Command
+          </span>
+        </div>
+        <div className="px-4 py-5 sm:px-5 space-y-5">
+          <h2 className="font-display text-3xl md:text-4xl leading-none">OPEN A ROOM</h2>
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[200px] space-y-1.5">
+              <label className="block font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+                Lobby name
+              </label>
+              <input
+                className="bento-input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter lobby name"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+                Game
+              </label>
+              <div className="inline-flex border border-border bg-bg-secondary">
+                <button
+                  type="button"
+                  onClick={() => setGame('cs2')}
+                  className={`px-3 py-2.5 font-display text-lg tracking-[0.12em] transition-colors ${
+                    game === 'cs2' ? 'bg-cs2 text-primary-contrast' : 'text-text-muted hover:text-text'
+                  }`}
+                >
+                  CS2
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGame('val')}
+                  className={`px-3 py-2.5 font-display text-lg tracking-[0.12em] transition-colors ${
+                    game === 'val' ? 'bg-team-b text-white' : 'text-text-muted hover:text-text'
+                  }`}
+                >
+                  VAL
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+                Size
+              </label>
+              <div className="inline-flex flex-wrap border border-border bg-bg-secondary">
+                {SIZES.map((size) => (
+                  <button
+                    key={size.value}
+                    type="button"
+                    onClick={() => setMaxPlayers(size.value)}
+                    className={`px-3 py-2.5 font-display text-lg tracking-[0.1em] transition-colors ${
+                      maxPlayers === size.value
+                        ? 'bg-card text-text'
+                        : 'text-text-muted hover:text-text'
+                    }`}
+                  >
+                    {size.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="block font-mono text-[0.6875rem] tracking-[0.16em] uppercase text-text-muted">
+                Visibility
+              </label>
+              <div className="inline-flex border border-border bg-bg-secondary">
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(true)}
+                  className={`px-3 py-2.5 font-display text-lg tracking-[0.12em] transition-colors ${
+                    isPublic ? 'bg-success-soft text-success' : 'text-text-muted hover:text-text'
+                  }`}
+                >
+                  Public
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPublic(false)}
+                  className={`px-3 py-2.5 font-display text-lg tracking-[0.12em] transition-colors ${
+                    !isPublic ? 'bg-card text-text' : 'text-text-muted hover:text-text'
+                  }`}
+                >
+                  Private
+                </button>
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={submitting || checking}
+              className="bento-btn bento-btn-primary"
             >
-              <option value="cs2">CS2</option>
-              <option value="val">Valorant</option>
-            </select>
+              {submitting ? 'Creating...' : 'Create lobby'}
+            </button>
           </div>
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-text-secondary">Size</label>
-            <select
-              className="bento-input min-w-[120px]"
-              value={maxPlayers}
-              onChange={(e) => setMaxPlayers(Number(e.target.value))}
-            >
-              <option value={2}>1v1</option>
-              <option value={4}>2v2</option>
-              <option value={6}>3v3</option>
-              <option value={8}>4v4</option>
-              <option value={10}>5v5</option>
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-sm cursor-pointer py-2">
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={(e) => setIsPublic(e.target.checked)}
-              className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
-            />
-            <span className="text-text-secondary">Public</span>
-          </label>
-          <button
-            type="submit"
-            disabled={submitting || checking}
-            className="bento-btn bento-btn-primary"
-          >
-            {submitting ? 'Creating...' : 'Create Lobby'}
-          </button>
         </div>
       </form>
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 backdrop-blur-sm">
           <div className="bento-card p-6 max-w-md w-full mx-4 space-y-4 animate-scale-in">
-            <h3 className="text-lg font-semibold">You already have a lobby</h3>
+            <p className="kicker">Blocked</p>
+            <h3 className="font-display text-3xl leading-none">You already have a lobby</h3>
             <p className="text-text-muted">
               You can only have one active lobby at a time. Please delete your existing lobby first, or refresh the page to see it.
             </p>

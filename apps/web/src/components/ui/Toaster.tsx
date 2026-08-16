@@ -28,16 +28,17 @@ export function Toaster() {
 
   return (
     <SonnerToaster
+      theme="dark"
       position="bottom-right"
       toastOptions={{
         classNames: {
-          toast: 'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800',
-          title: 'text-gray-900 dark:text-gray-50',
-          description: 'text-gray-500 dark:text-gray-400',
-          success: 'border-green-500',
-          error: 'border-red-500',
-          warning: 'border-yellow-500',
-          info: 'border-blue-500',
+          toast: '!bg-card !text-text !border !border-border !rounded-none shadow-bento',
+          title: '!text-text font-medium',
+          description: '!text-text-muted',
+          success: '!border-success',
+          error: '!border-danger',
+          warning: '!border-warning',
+          info: '!border-team-b',
         },
       }}
     />

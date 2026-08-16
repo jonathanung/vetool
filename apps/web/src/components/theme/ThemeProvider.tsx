@@ -22,8 +22,13 @@ export function ThemeSwitcher() {
   }
 
   return (
-    <button type="button" onClick={toggle} className="bento-btn bento-btn-ghost text-sm px-3 py-2">
-      {preset === 'neon' ? 'Soft' : 'Neon'}
+    <button
+      type="button"
+      onClick={toggle}
+      className="hidden sm:inline-flex px-3 py-2 text-xs font-mono font-semibold tracking-[0.16em] uppercase text-text-muted hover:text-text hover:bg-bg-secondary"
+      title={preset === 'neon' ? 'Switch to day' : 'Switch to night'}
+    >
+      {preset === 'neon' ? 'Night' : 'Day'}
     </button>
   )
 }

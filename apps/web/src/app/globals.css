@@ -2,226 +2,317 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* Daily-like ink/paper — inversion is the accent, not a hue */
-  --bg: #fafaf8;
-  --bg-secondary: #f0f0ec;
-  --card: #ffffff;
-  --card-hover: #f7f7f5;
-  --border: #e6e6e2;
-  --border-subtle: #f0f0ec;
-  --text: #161618;
-  --text-secondary: #3e3e42;
-  --text-muted: #6c6c6f;
-  --primary: #161618;
-  --primary-hover: #000000;
-  --primary-soft: #f0f0ec;
-  --primary-contrast: #ffffff;
-  --accent: #161618;
-  --accent-soft: #f0f0ec;
-  --success: #1b7f45;
-  --success-soft: #e8f6ee;
-  --danger: #ea4a3c;
-  --danger-soft: #fdecea;
-  --warning: #cf7a00;
-  --warning-soft: #faf0e0;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.06), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
-  --radius: 16px;
-  --radius-sm: 12px;
-  --radius-lg: 24px;
+:root,
+.dark,
+[data-theme="dark"] {
+  --bg: #07080c;
+  --bg-secondary: #0c1018;
+  --card: #12171f;
+  --card-hover: #171d28;
+  --border: #232a38;
+  --border-subtle: #1a2030;
+  --text: #f4f1ea;
+  --text-secondary: #c8c3b8;
+  --text-muted: #7d8494;
+  --team-a: #ff3b4e;
+  --team-a-hover: #ff5566;
+  --team-a-soft: rgba(255, 59, 78, 0.14);
+  --team-b: #3b82ff;
+  --team-b-hover: #5c97ff;
+  --team-b-soft: rgba(59, 130, 255, 0.14);
+  --primary: #ff3b4e;
+  --primary-hover: #ff5566;
+  --primary-soft: rgba(255, 59, 78, 0.14);
+  --primary-contrast: #07080c;
+  --accent: #3b82ff;
+  --accent-soft: rgba(59, 130, 255, 0.14);
+  --success: #2ee59d;
+  --success-soft: rgba(46, 229, 157, 0.14);
+  --danger: #ff3b4e;
+  --danger-soft: rgba(255, 59, 78, 0.14);
+  --warning: #ffb020;
+  --warning-soft: rgba(255, 176, 32, 0.14);
+  --cs2: #f0a202;
+  --val: #ff4655;
+  --shadow-sm: 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 0 0 1px rgba(255, 59, 78, 0.18), 0 16px 40px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --radius: 4px;
+  --radius-sm: 2px;
+  --radius-lg: 6px;
+  --grid-line: rgba(255, 255, 255, 0.035);
+  --hatch: rgba(255, 59, 78, 0.045);
 }
 
-.dark, [data-theme="dark"] {
-  --bg: #0c0c0d;
-  --bg-secondary: #161618;
-  --card: #161618;
-  --card-hover: #202024;
-  --border: #2a2a2e;
-  --border-subtle: #202024;
-  --text: #fafaf8;
-  --text-secondary: #d8d8d4;
-  --text-muted: #8f9193;
-  --primary: #fafaf8;
-  --primary-hover: #ffffff;
-  --primary-soft: #202024;
-  --primary-contrast: #0c0c0d;
-  --accent: #fafaf8;
-  --accent-soft: #202024;
-  --success: #4ade80;
-  --success-soft: rgba(23, 201, 100, 0.14);
-  --danger: #f87171;
-  --danger-soft: rgba(234, 74, 60, 0.14);
-  --warning: #fbbf24;
-  --warning-soft: rgba(207, 122, 0, 0.14);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+[data-theme="soft"] {
+  --bg: #ece8df;
+  --bg-secondary: #e2ddd2;
+  --card: #f7f4ee;
+  --card-hover: #fffdf8;
+  --border: #cfc8b8;
+  --border-subtle: #ddd7ca;
+  --text: #12141a;
+  --text-secondary: #2c3038;
+  --text-muted: #5c616c;
+  --team-a: #e11d38;
+  --team-a-hover: #c4122c;
+  --team-a-soft: rgba(225, 29, 56, 0.12);
+  --team-b: #1d4ed8;
+  --team-b-hover: #1e40af;
+  --team-b-soft: rgba(29, 78, 216, 0.12);
+  --primary: #e11d38;
+  --primary-hover: #c4122c;
+  --primary-soft: rgba(225, 29, 56, 0.12);
+  --primary-contrast: #fffdf8;
+  --accent: #1d4ed8;
+  --accent-soft: rgba(29, 78, 216, 0.12);
+  --success: #0f9f6e;
+  --success-soft: rgba(15, 159, 110, 0.12);
+  --danger: #e11d38;
+  --danger-soft: rgba(225, 29, 56, 0.12);
+  --warning: #c47b00;
+  --warning-soft: rgba(196, 123, 0, 0.12);
+  --cs2: #c47b00;
+  --val: #e11d38;
+  --shadow-sm: 0 1px 0 rgba(18, 20, 26, 0.06);
+  --shadow: 0 0 0 1px rgba(18, 20, 26, 0.06), 0 10px 24px rgba(18, 20, 26, 0.08);
+  --shadow-md: 0 0 0 1px rgba(225, 29, 56, 0.2), 0 14px 28px rgba(18, 20, 26, 0.1);
+  --shadow-lg: 0 20px 40px rgba(18, 20, 26, 0.12);
+  --grid-line: rgba(18, 20, 26, 0.06);
+  --hatch: rgba(225, 29, 56, 0.05);
 }
 
 html {
-  font-feature-settings: "ss01", "ss02", "cv01";
+  font-feature-settings: "ss01", "cv11";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-html, body {
+html,
+body {
   background: var(--bg);
   color: var(--text);
 }
 
-/* Bento Card Styles */
-.bento-card {
+body {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+    radial-gradient(1200px 500px at 0% -10%, var(--team-a-soft), transparent 55%),
+    radial-gradient(1000px 480px at 100% 0%, var(--team-b-soft), transparent 50%);
+  background-size: 48px 48px, 48px 48px, auto, auto;
+  background-attachment: fixed;
+}
+
+.font-display {
+  font-family: var(--font-display), Impact, "Arial Narrow", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.kicker::before {
+  content: "";
+  width: 1.25rem;
+  height: 2px;
+  background: linear-gradient(90deg, var(--team-a), var(--team-b));
+}
+
+/* Panels — squared, rail-accented. bento-* kept as aliases. */
+.bento-card,
+.panel {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  position: relative;
 }
 
-.bento-card:hover {
-  box-shadow: var(--shadow-md);
+.panel-rail::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--team-a), var(--team-b));
 }
 
-.bento-card-interactive {
+.bento-card-interactive,
+.panel-interactive {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
   cursor: pointer;
+  position: relative;
 }
 
-.bento-card-interactive:hover {
+.bento-card-interactive:hover,
+.panel-interactive:hover {
   background: var(--card-hover);
-  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--team-a) 55%, var(--border));
   transform: translateY(-1px);
 }
 
-/* Bento Grid */
 .bento-grid {
   display: grid;
   gap: 1rem;
 }
 
-@media (min-width: 640px) {
-  .bento-grid {
-    gap: 1.25rem;
-  }
-}
-
-@media (min-width: 768px) {
-  .bento-grid {
-    gap: 1.5rem;
-  }
-}
-
-/* Bento Input */
-.bento-input {
+.bento-input,
+.field {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.7rem 0.85rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   color: var(--text);
   font-size: 0.9375rem;
-  transition: all 0.2s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.bento-input::placeholder {
+.bento-input::placeholder,
+.field::placeholder {
   color: var(--text-muted);
 }
 
-.bento-input:focus {
+.bento-input:focus,
+.field:focus {
   outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  border-color: var(--team-a);
+  box-shadow: 0 0 0 3px var(--team-a-soft);
 }
 
-/* Bento Button */
-.bento-btn {
+select.bento-input,
+select.field {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) calc(50% - 3px), calc(100% - 11px) calc(50% - 3px);
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2rem;
+}
+
+.bento-btn,
+.btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  font-size: 0.9375rem;
-  font-weight: 500;
+  padding: 0.7rem 1.15rem;
+  font-family: var(--font-display), Impact, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   border-radius: var(--radius-sm);
-  transition: all 0.2s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   cursor: pointer;
-  border: none;
+  border: 1px solid transparent;
+  line-height: 1;
 }
 
-.bento-btn-primary {
-  background: var(--primary);
-  color: var(--primary-contrast);
+.bento-btn-primary,
+.btn-primary {
+  background: var(--team-a);
+  color: #fff;
+  border-color: var(--team-a);
 }
 
-.bento-btn-primary:hover {
-  background: var(--primary-hover);
+.bento-btn-primary:hover,
+.btn-primary:hover {
+  background: var(--team-a-hover);
   transform: translateY(-1px);
-  box-shadow: var(--shadow-md);
 }
 
-.bento-btn-secondary {
-  background: var(--bg-secondary);
+.bento-btn-secondary,
+.btn-secondary {
+  background: transparent;
   color: var(--text);
-  border: 1px solid var(--border);
+  border-color: var(--border);
 }
 
-.bento-btn-secondary:hover {
-  background: var(--card-hover);
-  border-color: var(--text-muted);
+.bento-btn-secondary:hover,
+.btn-secondary:hover {
+  border-color: var(--team-b);
+  color: var(--team-b);
+  background: var(--team-b-soft);
 }
 
-.bento-btn-ghost {
+.bento-btn-ghost,
+.btn-ghost {
   background: transparent;
   color: var(--text-secondary);
+  border-color: transparent;
 }
 
-.bento-btn-ghost:hover {
+.bento-btn-ghost:hover,
+.btn-ghost:hover {
   background: var(--bg-secondary);
   color: var(--text);
 }
 
-.bento-btn:disabled {
-  opacity: 0.5;
+.bento-btn:disabled,
+.btn:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none !important;
 }
 
-/* Bento Badge */
-.bento-badge {
+.bento-badge,
+.chip {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  border-radius: 999px;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
 }
 
-.bento-badge-primary {
-  background: var(--primary-soft);
-  color: var(--primary);
+.bento-badge-primary,
+.chip-a {
+  background: var(--team-a-soft);
+  color: var(--team-a);
+  border-color: color-mix(in srgb, var(--team-a) 40%, transparent);
 }
 
 .bento-badge-success {
   background: var(--success-soft);
   color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
 }
 
 .bento-badge-danger {
   background: var(--danger-soft);
   color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
 .bento-badge-warning {
   background: var(--warning-soft);
   color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 40%, transparent);
 }
 
 .bento-badge-muted {
@@ -229,14 +320,62 @@ html, body {
   color: var(--text-muted);
 }
 
-/* Bento Divider */
+.chip-b {
+  background: var(--team-b-soft);
+  color: var(--team-b);
+  border-color: color-mix(in srgb, var(--team-b) 40%, transparent);
+}
+
+.chip-cs2 {
+  background: rgba(240, 162, 2, 0.14);
+  color: var(--cs2);
+  border-color: color-mix(in srgb, var(--cs2) 40%, transparent);
+}
+
+.chip-val {
+  background: rgba(255, 70, 85, 0.14);
+  color: var(--val);
+  border-color: color-mix(in srgb, var(--val) 40%, transparent);
+}
+
 .bento-divider {
   height: 1px;
   background: var(--border);
   border: none;
 }
 
-/* Smooth scrollbar */
+.stat {
+  padding: 1rem 1.1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.stat .stat-value {
+  font-family: var(--font-display), Impact, sans-serif;
+  font-size: 2rem;
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.stat .stat-label {
+  margin-top: 0.35rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.score-a {
+  color: var(--team-a);
+}
+
+.score-b {
+  color: var(--team-b);
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -244,22 +383,19 @@ html, body {
 
 ::-webkit-scrollbar-track {
   background: var(--bg-secondary);
-  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
 
-/* Selection */
 ::selection {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--team-a);
+  color: #fff;
 }
 
 @layer utilities {

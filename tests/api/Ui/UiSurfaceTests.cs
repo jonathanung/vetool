@@ -34,8 +34,8 @@ public class UiSurfaceTests
         home.Should().Contain("valorant");
 
         var css = Read("app", "globals.css");
-        css.Should().Contain("#161618");
-        css.Should().Contain("#fafaf8");
+        css.Should().Contain("#ff3b4e");
+        css.Should().Contain("#3b82ff");
         css.Should().NotContain("#2563eb");
         css.Should().NotContain("#8b5cf6");
 

@@ -10,8 +10,8 @@ export default function Dialog({ open, onClose, children }: { open: boolean; onC
     if (!open && d.open) d.close()
   }, [open])
   return (
-    <dialog ref={ref} onClose={onClose} className="rounded-2xl bg-[var(--card)] text-[var(--text)] backdrop:bg-black/30">
-      <div className="p-4">{children}</div>
+    <dialog ref={ref} onClose={onClose} className="bg-card text-text border border-border p-0 shadow-bento-lg">
+      <div className="p-5">{children}</div>
     </dialog>
   )
-} 
+}

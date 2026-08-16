@@ -24,11 +24,11 @@ export default function Button({
     primary: 'bento-btn-primary',
     secondary: 'bento-btn-secondary',
     ghost: 'bento-btn-ghost',
-    danger: 'bg-danger text-white hover:bg-danger/90',
+    danger: 'bg-danger text-white border-danger hover:bg-danger/90',
   }
 
   const sizeClasses: Record<ButtonSize, string> = {
-    sm: 'px-3 py-1.5 text-sm',
+    sm: 'px-3 py-1.5 text-xs',
     md: 'px-4 py-2',
     lg: 'px-6 py-3 text-lg',
   }

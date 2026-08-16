@@ -16,7 +16,7 @@ export default async function MatchPage({ params }: { params: { id: string } }) 
   const nextAction = (veto?.nextAction ?? veto?.NextAction ?? null) as 'ban' | 'pick' | null
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="container mx-auto py-8">
       <VetoClient
         matchId={params.id}
         mode={mode}
