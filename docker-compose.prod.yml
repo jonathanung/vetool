@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vetool-postgres
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vetool-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: vetool-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - vetool-network
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: vetool-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_CONNECTION: ${REDIS_CONNECTION}
+      JWT__Secret: ${JWT__Secret}
+      JWT__Key: ${JWT__Key}
+      JWT_KEY_PATH: /app/keys/jwt-rsa.pem
+      JWT_COOKIE_NAME: ${JWT_COOKIE_NAME}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      PUBLIC_WEB_ORIGIN: ${PUBLIC_WEB_ORIGIN}
+      AUTH_REQUIRE_EMAIL_CONFIRMATION: ${AUTH_REQUIRE_EMAIL_CONFIRMATION}
+      Hangfire__DashboardEnabled: "false"
+    ports:
+      - "127.0.0.1:${API_PORT}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - jwt_keys:/app/keys
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - vetool-network
+
+  web:
+    build:
+      context: apps/web
+      dockerfile: Dockerfile
+      args:
+        API_BASE_INTERNAL: http://api:8080/api/v1
+    container_name: vetool-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_BASE_INTERNAL: http://api:8080/api/v1
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    ports:
+      - "127.0.0.1:${WEB_PORT}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - vetool-network
+
+networks:
+  vetool-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  jwt_keys:
