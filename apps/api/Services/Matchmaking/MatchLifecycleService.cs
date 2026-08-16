@@ -54,6 +54,7 @@ public sealed class MatchLifecycleService
     {
         var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == lobbyId, ct);
         if (lobby is null) return StartMatchResult.Fail("not_found");
+        if (!LobbyLifetime.IsLive(lobby, DateTime.UtcNow)) return StartMatchResult.Fail("expired");
         if (lobby.CreatedByUserId != userId) throw new UnauthorizedAccessException();
 
         var seats = await _db.LobbyMemberships.AsNoTracking()

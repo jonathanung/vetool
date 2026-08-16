@@ -15,12 +15,14 @@ public class LobbyHub : Hub
     private readonly ISequenceGenerator _seq;
     private readonly IIdempotencyService _idem;
     private readonly LobbyMembershipService _membership;
+    private readonly LobbyChatService _chat;
 
-    public LobbyHub(ISequenceGenerator seq, IIdempotencyService idem, LobbyMembershipService membership)
+    public LobbyHub(ISequenceGenerator seq, IIdempotencyService idem, LobbyMembershipService membership, LobbyChatService chat)
     {
         _seq = seq;
         _idem = idem;
         _membership = membership;
+        _chat = chat;
     }
 
     private static string GroupFor(Guid lobbyId) => $"lobby:{lobbyId}";
@@ -33,14 +35,57 @@ public class LobbyHub : Hub
 
         if (TryUserId(out var userId))
         {
-            await _membership.TryJoinAsync(lobbyId, userId);
+            var outcome = await _membership.TryJoinAsync(lobbyId, userId);
+            if (outcome == JoinOutcome.Expired)
+            {
+                await Clients.Caller.SendAsync("Error", new RealtimeEnvelope("Error", 0, DateTime.UtcNow, new ErrorEvent("expired", "This lobby expired.", null)));
+                return;
+            }
         }
 
         var seq = await _seq.NextLobbySequenceAsync(lobbyId);
         var snapshot = await _membership.GetRosterSnapshotAsync(lobbyId);
         await Clients.Caller.SendAsync("LobbySnapshot", new RealtimeEnvelope("LobbySnapshot", seq, DateTime.UtcNow, ShapeSnapshot(lobbyId, snapshot)));
+        var history = await _chat.ListRecentAsync(lobbyId);
+        await Clients.Caller.SendAsync("ChatHistory", new RealtimeEnvelope("ChatHistory", seq, DateTime.UtcNow, history));
         var payload = new UserJoinedEvent(lobbyId, userId);
         await Clients.OthersInGroup(GroupFor(lobbyId)).SendAsync("UserJoined", new RealtimeEnvelope("UserJoined", seq, DateTime.UtcNow, payload));
+    }
+
+    public async Task SendChat(Guid lobbyId, string text, string clientRequestId)
+    {
+        if (!await _idem.TryBeginAsync($"lobby:{lobbyId}:chat:{clientRequestId}", clientRequestId, TimeSpan.FromMinutes(2))) return;
+        if (!TryUserId(out var userId) || userId == Guid.Empty)
+        {
+            await EmitError(lobbyId, "unauthorized", "Not signed in");
+            return;
+        }
+
+        var posted = await _chat.PostAsync(lobbyId, userId, text);
+        if (!posted.Ok || posted.Message is null)
+        {
+            var message = posted.Error switch
+            {
+                "empty" => "Message is empty.",
+                "too_long" => "Message is too long.",
+                "not_member" => "Join the lobby to chat.",
+                "expired" => "This lobby expired.",
+                _ => "Could not send message."
+            };
+            await EmitError(lobbyId, posted.Error ?? "chat_failed", message);
+            return;
+        }
+
+        var seq = await _seq.NextLobbySequenceAsync(lobbyId);
+        var evt = new ChatMessageEvent(
+            posted.Message.Id,
+            posted.Message.LobbyId,
+            posted.Message.UserId,
+            posted.Message.UserName,
+            posted.Message.DisplayName,
+            posted.Message.Body,
+            posted.Message.CreatedAt);
+        await Clients.Group(GroupFor(lobbyId)).SendAsync("ChatMessage", new RealtimeEnvelope("ChatMessage", seq, DateTime.UtcNow, evt));
     }
 
     public async Task LeaveLobby(Guid lobbyId)

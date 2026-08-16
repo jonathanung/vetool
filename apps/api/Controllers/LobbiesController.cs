@@ -25,6 +25,7 @@ public class LobbiesController : ControllerBase
     private readonly JwtCookieOptions _cookieOptions;
     private readonly LobbyMembershipService _membership;
     private readonly MatchLifecycleService _matches;
+    private readonly LobbyChatService _chat;
 
     public LobbiesController(
         AppDbContext db,
@@ -32,7 +33,8 @@ public class LobbiesController : ControllerBase
         IJwtTokenService jwt,
         IOptions<JwtCookieOptions> cookieOptions,
         LobbyMembershipService membership,
-        MatchLifecycleService matches)
+        MatchLifecycleService matches,
+        LobbyChatService chat)
     {
         _db = db;
         _userManager = userManager;
@@ -40,6 +42,7 @@ public class LobbiesController : ControllerBase
         _cookieOptions = cookieOptions.Value;
         _membership = membership;
         _matches = matches;
+        _chat = chat;
     }
 
     [HttpPost]
@@ -47,12 +50,18 @@ public class LobbiesController : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateLobbyRequest req)
     {
         var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-        var existing = await _db.Lobbies.FirstOrDefaultAsync(l => l.CreatedByUserId == userId && l.Status != LobbyStatus.Completed);
+        var now = DateTime.UtcNow;
+        var existing = await _db.Lobbies.FirstOrDefaultAsync(l =>
+            l.CreatedByUserId == userId &&
+            l.Status != LobbyStatus.Completed &&
+            l.Status != LobbyStatus.Expired &&
+            l.ExpiresAt > now);
         if (existing is not null) return Conflict(new { message = "You already own a lobby." });
 
         var maxPlayers = req.MaxPlayers ?? 10;
         if (maxPlayers < 2 || maxPlayers > 10) return BadRequest(new { message = "Max players must be between 2 and 10." });
 
+        var createdAt = DateTime.UtcNow;
         var lobby = new Lobby
         {
             Id = Guid.NewGuid(),
@@ -61,6 +70,9 @@ public class LobbiesController : ControllerBase
             CreatedByUserId = userId,
             Status = LobbyStatus.Open,
             MaxPlayers = maxPlayers,
+            CreatedAt = createdAt,
+            UpdatedAt = createdAt,
+            ExpiresAt = LobbyLifetime.ExpiresAt(createdAt),
             Settings = JsonDocument.Parse($"{{\"isPublic\":{(req.IsPublic ? "true" : "false")}}}")
         };
         _db.Lobbies.Add(lobby);
@@ -95,6 +107,8 @@ public class LobbiesController : ControllerBase
             if (parsedGame.HasValue) q = q.Where(l => l.Game == parsedGame.Value);
         }
 
+        var now = DateTime.UtcNow;
+        q = q.Where(l => l.ExpiresAt > now && l.Status != LobbyStatus.Expired);
         if (status.HasValue) q = q.Where(l => l.Status == status);
 
         var mineRequested = mine is not null && (mine.Equals("true", StringComparison.OrdinalIgnoreCase) || mine == "1");
@@ -145,7 +159,10 @@ public class LobbiesController : ControllerBase
             l.MaxPlayers,
             MemberCount = countById.GetValueOrDefault(l.Id),
             IsPublic = IsPublic(l),
-            IsMine = uid.HasValue && l.CreatedByUserId == uid.Value
+            IsMine = uid.HasValue && l.CreatedByUserId == uid.Value,
+            l.CreatedAt,
+            l.ExpiresAt,
+            Expired = !LobbyLifetime.IsLive(l, now)
         });
 
         return Ok(shaped);
@@ -167,6 +184,35 @@ public class LobbiesController : ControllerBase
         }));
     }
 
+    [HttpGet("{id:guid}/messages")]
+    public async Task<IActionResult> Messages(Guid id)
+    {
+        var exists = await _db.Lobbies.AsNoTracking().AnyAsync(l => l.Id == id);
+        if (!exists) return NotFound();
+        return Ok(await _chat.ListRecentAsync(id));
+    }
+
+    [Authorize]
+    [HttpPost("{id:guid}/messages")]
+    public async Task<IActionResult> PostMessage(Guid id, [FromBody] LobbyChatRequest req)
+    {
+        var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var posted = await _chat.PostAsync(id, userId, req.Body ?? string.Empty);
+        if (!posted.Ok || posted.Message is null)
+        {
+            return posted.Error switch
+            {
+                "not_found" => NotFound(new { message = "Lobby not found." }),
+                "expired" => StatusCode(StatusCodes.Status410Gone, new { message = "This lobby expired." }),
+                "not_member" => Forbid(),
+                "empty" => BadRequest(new { message = "Message is empty." }),
+                "too_long" => BadRequest(new { message = "Message is too long." }),
+                _ => BadRequest(new { message = "Could not send message." })
+            };
+        }
+        return Ok(posted.Message);
+    }
+
     [Authorize]
     [HttpPost("{id:guid}/join")]
     public async Task<IActionResult> Join(Guid id)
@@ -176,6 +222,7 @@ public class LobbiesController : ControllerBase
         return outcome switch
         {
             JoinOutcome.NotFound => NotFound(new { message = "Lobby not found." }),
+            JoinOutcome.Expired => StatusCode(StatusCodes.Status410Gone, new { message = "This lobby expired." }),
             JoinOutcome.Full => Conflict(new { message = "Lobby is full." }),
             JoinOutcome.AlreadyMember => Ok(new { joined = true, alreadyMember = true }),
             _ => Ok(new { joined = true })
@@ -188,6 +235,8 @@ public class LobbiesController : ControllerBase
     {
         var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == id);
         if (lobby is null) return NotFound(new { message = "Lobby not found." });
+        if (!LobbyLifetime.IsLive(lobby, DateTime.UtcNow))
+            return StatusCode(StatusCodes.Status410Gone, new { message = "This lobby expired." });
 
         var count = await _db.LobbyMemberships.CountAsync(m => m.LobbyId == id && m.LeftAt == null);
         if (count >= lobby.MaxPlayers) return Conflict(new { message = "Lobby is full." });
@@ -229,6 +278,7 @@ public class LobbiesController : ControllerBase
                 return started.Error switch
                 {
                     "not_found" => NotFound(new { message = "Lobby not found." }),
+                    "expired" => StatusCode(StatusCodes.Status410Gone, new { message = "This lobby expired." }),
                     MatchStartGate.NeedTwoPlayers => Conflict(new { message = "Need at least two players." }),
                     MatchStartGate.NeedTwoCaptains => Conflict(new { message = "Need two captains before veto." }),
                     _ => Conflict(new { message = started.Error })
@@ -358,7 +408,10 @@ public class LobbiesController : ControllerBase
             CanStart = canStart,
             StartBlock = startBlock,
             IsPublic = IsPublic(lobby),
-            IsMine = uid.HasValue && lobby.CreatedByUserId == uid.Value
+            IsMine = uid.HasValue && lobby.CreatedByUserId == uid.Value,
+            lobby.CreatedAt,
+            lobby.ExpiresAt,
+            Expired = !LobbyLifetime.IsLive(lobby, DateTime.UtcNow)
         };
     }
 
@@ -451,3 +504,4 @@ public record StartMatchRequest(int BestOf);
 public record SetCaptainsRequest(Guid TeamAUserId, Guid TeamBUserId);
 public record FirstPickRequest(string Team);
 public record LobbyMapsRequest(List<Guid>? MapIds);
+public record LobbyChatRequest(string? Body);

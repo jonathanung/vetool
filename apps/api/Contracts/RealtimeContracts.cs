@@ -7,6 +7,7 @@ public record UserJoinedEvent(Guid LobbyId, Guid UserId);
 public record UserLeftEvent(Guid LobbyId, Guid UserId);
 public record CaptainsSetEvent(Guid LobbyId, Guid TeamAUserId, Guid TeamBUserId);
 public record TeamsUpdatedEvent(Guid LobbyId, IReadOnlyList<Guid> TeamA, IReadOnlyList<Guid> TeamB);
+public record ChatMessageEvent(Guid Id, Guid LobbyId, Guid UserId, string UserName, string DisplayName, string Body, DateTime CreatedAt);
 
 // Veto events
 public record VetoStartedEvent(Guid MatchId, string Mode);

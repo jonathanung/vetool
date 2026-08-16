@@ -48,6 +48,7 @@ public static class SeedData
         if (!await db.Lobbies.AnyAsync())
         {
             var lobbyId = Guid.NewGuid();
+            var createdAt = DateTime.UtcNow;
             db.Lobbies.Add(new Lobby
             {
                 Id = lobbyId,
@@ -55,7 +56,10 @@ public static class SeedData
                 Name = "Demo Lobby",
                 Status = LobbyStatus.Open,
                 CreatedByUserId = demoUser.Id,
-                MaxPlayers = 10
+                MaxPlayers = 10,
+                CreatedAt = createdAt,
+                UpdatedAt = createdAt,
+                ExpiresAt = createdAt.AddHours(24)
             });
             db.LobbyMemberships.Add(new LobbyMembership
             {

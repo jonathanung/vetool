@@ -11,6 +11,9 @@ export type Lobby = {
   createdByUserId?: string
   isPublic?: boolean
   isMine?: boolean
+  createdAt?: string
+  expiresAt?: string
+  expired?: boolean
 }
 export type LobbyMember = { userId: string; userName: string; displayName: string; role: string; team: string }
 

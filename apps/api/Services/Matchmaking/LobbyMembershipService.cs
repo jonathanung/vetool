@@ -10,7 +10,8 @@ public enum JoinOutcome
     Joined,
     AlreadyMember,
     NotFound,
-    Full
+    Full,
+    Expired
 }
 
 public sealed record LobbyMemberView(Guid UserId, string UserName, string? DisplayName, LobbyRole Role, TeamSide Team);
@@ -35,6 +36,7 @@ public sealed class LobbyMembershipService
     {
         var lobby = await _db.Lobbies.FirstOrDefaultAsync(l => l.Id == lobbyId, ct);
         if (lobby is null) return JoinOutcome.NotFound;
+        if (!LobbyLifetime.IsLive(lobby, DateTime.UtcNow)) return JoinOutcome.Expired;
 
         var existing = await _db.LobbyMemberships.FirstOrDefaultAsync(m => m.LobbyId == lobbyId && m.UserId == userId, ct);
         if (existing is not null)

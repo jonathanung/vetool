@@ -15,6 +15,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
     public DbSet<UserSession> UserSessions => Set<UserSession>();
     public DbSet<Lobby> Lobbies => Set<Lobby>();
     public DbSet<LobbyMembership> LobbyMemberships => Set<LobbyMembership>();
+    public DbSet<LobbyChatMessage> LobbyChatMessages => Set<LobbyChatMessage>();
     public DbSet<GameMap> Maps => Set<GameMap>();
     public DbSet<MapPool> MapPools => Set<MapPool>();
     public DbSet<MapPoolMap> MapPoolMaps => Set<MapPoolMap>();
@@ -69,6 +70,13 @@ public class AppDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid
             b.HasIndex(x => new { x.Game, x.Status });
             b.HasIndex(x => x.CreatedByUserId);
             b.HasIndex(x => x.UpdatedAt);
+            b.HasIndex(x => x.ExpiresAt);
+        });
+
+        builder.Entity<LobbyChatMessage>(b =>
+        {
+            b.Property(x => x.Body).HasMaxLength(300).IsRequired();
+            b.HasIndex(x => new { x.LobbyId, x.CreatedAt });
         });
 
         builder.Entity<LobbyMembership>(b =>

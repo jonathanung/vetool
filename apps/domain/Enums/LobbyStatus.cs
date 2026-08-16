@@ -5,5 +5,6 @@ public enum LobbyStatus
     Open = 0,
     Ready = 1,
     InProgress = 2,
-    Completed = 3
+    Completed = 3,
+    Expired = 4
 } 
