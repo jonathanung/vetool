@@ -12,12 +12,11 @@ export function applyTheme(preset: ThemePreset) {
   if (theme.className) html.classList.add(theme.className)
   if (theme.dataTheme) html.setAttribute('data-theme', theme.dataTheme)
   else html.removeAttribute('data-theme')
+  html.classList.toggle('dark', preset === 'neon')
   localStorage.setItem('vetool-theme', preset)
 }
 
 export function initTheme() {
   const stored = (localStorage.getItem('vetool-theme') as ThemePreset) || null
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const preset: ThemePreset = stored || (prefersDark ? 'neon' : 'soft')
-  applyTheme(preset)
+  applyTheme(stored || 'neon')
 } 

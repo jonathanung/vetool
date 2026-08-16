@@ -31,6 +31,15 @@ const config: Config = {
         'danger-soft': 'var(--danger-soft)',
         warning: 'var(--warning)',
         'warning-soft': 'var(--warning-soft)',
+        'team-a': 'var(--team-a)',
+        'team-b': 'var(--team-b)',
+        cs2: 'var(--cs2)',
+        val: 'var(--val)',
+      },
+      fontFamily: {
+        display: ['var(--font-display)', 'Impact', 'Arial Narrow', 'sans-serif'],
+        body: ['var(--font-body)', 'ui-sans-serif', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
         'bento': 'var(--radius)',
@@ -48,14 +57,14 @@ const config: Config = {
         '22': '5.5rem',
       },
       fontSize: {
-        '2xs': ['0.6875rem', { lineHeight: '1rem' }],
+        '2xs': ['0.6875rem', { lineHeight: '1rem', letterSpacing: '0.16em' }],
       },
       transitionTimingFunction: {
         'bento': 'cubic-bezier(0.22, 1, 0.36, 1)',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
-        'slide-up': 'slideUp 0.3s ease-out',
+        'slide-up': 'slideUp 0.35s ease-out',
         'scale-in': 'scaleIn 0.2s ease-out',
       },
       keyframes: {
@@ -64,11 +73,11 @@ const config: Config = {
           '100%': { opacity: '1' },
         },
         slideUp: {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         scaleIn: {
-          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '0%': { opacity: '0', transform: 'scale(0.97)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
       },
@@ -84,7 +93,7 @@ const config: Config = {
         sm: '640px',
         md: '768px',
         lg: '1024px',
-        xl: '1200px',
+        xl: '1280px',
       },
     },
   },

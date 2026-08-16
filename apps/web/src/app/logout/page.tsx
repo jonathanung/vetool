@@ -9,6 +9,12 @@ export default function LogoutPage() {
       .finally(() => router.replace('/'))
   }, [router])
   return (
-    <div className="p-4 text-sm">Signing out…</div>
+    <div className="container mx-auto py-8">
+      <div className="bento-card max-w-md mx-auto p-8 text-center space-y-2">
+        <p className="kicker mx-auto justify-center">Session</p>
+        <h1 className="font-display text-4xl leading-none">Signing out</h1>
+        <p className="text-sm text-text-muted">Clearing your session.</p>
+      </div>
+    </div>
   )
-} 
+}

@@ -85,102 +85,105 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto py-12 animate-fade-in">
-      <div className="bento-card p-8 space-y-6">
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold">Create account</h1>
-          <p className="text-text-muted">Get started with VeTool</p>
-        </div>
-
-        <form onSubmit={handleSignup} className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-text-secondary">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="bento-input"
-              placeholder="you@example.com"
-              required
-            />
+    <div className="container mx-auto py-8">
+      <div className="max-w-md mx-auto animate-fade-in">
+        <div className="bento-card p-8 space-y-6">
+          <div className="space-y-2">
+            <p className="kicker">New account</p>
+            <h1 className="font-display text-5xl leading-none">Create account</h1>
+            <p className="text-text-muted">Host lobbies. Draft captains. Run the veto.</p>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-text-secondary">Username</label>
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="bento-input"
-              placeholder="Choose a username"
-              required
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-text-secondary">Password</label>
-            <div className="relative">
+          <form onSubmit={handleSignup} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-text-secondary">Email</label>
               <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="bento-input pr-16"
-                placeholder="Create a password"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bento-input"
+                placeholder="you@example.com"
                 required
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-muted hover:text-text transition-colors"
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
             </div>
-          </div>
 
-          {msg && (
-            <div
-              className={`p-3 rounded-bento-sm text-sm ${
-                msgType === 'success'
-                  ? 'bg-success-soft text-success'
-                  : 'bg-danger-soft text-danger'
-              }`}
-              role="alert"
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-text-secondary">Username</label>
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="bento-input"
+                placeholder="Choose a username"
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-sm font-medium text-text-secondary">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="bento-input pr-16"
+                  placeholder="Create a password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-text-muted hover:text-text transition-colors"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            {msg && (
+              <div
+                className={`p-3 text-sm ${
+                  msgType === 'success'
+                    ? 'bg-success-soft text-success'
+                    : 'bg-danger-soft text-danger'
+                }`}
+                role="alert"
+              >
+                {msg}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="bento-btn bento-btn-primary w-full"
             >
-              {msg}
+              {submitting ? 'Creating account...' : 'Create Account'}
+            </button>
+          </form>
+
+          {verifyToken && (
+            <div className="p-4 bg-bg-secondary border border-border space-y-3">
+              <div className="text-sm font-medium">Dev: Email Verification</div>
+              <pre className="text-xs p-3 bg-card border border-border overflow-auto font-mono">
+                {verifyToken}
+              </pre>
+              <button
+                onClick={handleVerify}
+                className="bento-btn bento-btn-secondary w-full"
+              >
+                Verify Email
+              </button>
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="bento-btn bento-btn-primary w-full"
-          >
-            {submitting ? 'Creating account...' : 'Create Account'}
-          </button>
-        </form>
-
-        {verifyToken && (
-          <div className="p-4 rounded-bento-sm bg-bg-secondary space-y-3">
-            <div className="text-sm font-medium">Dev: Email Verification</div>
-            <pre className="text-xs p-3 rounded-bento-sm bg-card border border-border overflow-auto">
-              {verifyToken}
-            </pre>
-            <button
-              onClick={handleVerify}
-              className="bento-btn bento-btn-secondary w-full"
-            >
-              Verify Email
-            </button>
+          <div className="pt-4 border-t border-border text-center">
+            <p className="text-sm text-text-muted">
+              Already have an account?{' '}
+              <Link href="/login" className="text-team-a hover:underline font-medium">
+                Sign in
+              </Link>
+            </p>
           </div>
-        )}
-
-        <div className="pt-4 border-t border-border text-center">
-          <p className="text-sm text-text-muted">
-            Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline font-medium">
-              Sign in
-            </Link>
-          </p>
         </div>
       </div>
     </div>
